@@ -7,7 +7,8 @@
     "dev": "vite",
     "dev:electron": "concurrently \"vite\" \"wait-on http://localhost:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .\"",
     "build": "vite build",
-    "build:electron": "vite build && electron-packager . \"小希\" --out=release --overwrite --platform=win32 --arch=x64 --electron-version=28.3.3 --ignore=node_modules --ignore=src --ignore=public --ignore=.git --ignore=release --ignore=\"启动.bat\" --ignore=\"启动.sh\"",
+    "build:win": "vite build && electron-packager . \"小希\" --out=release --overwrite --platform=win32 --arch=x64 --electron-version=28.3.3 --ignore=node_modules --ignore=src --ignore=public --ignore=.git --ignore=release --ignore=\"启动.bat\" --ignore=\"启动.sh\"",
+    "build:mac": "vite build && electron-packager . \"小希\" --out=release --overwrite --platform=darwin --arch=x64 --electron-version=28.3.3 --ignore=node_modules --ignore=src --ignore=public --ignore=.git --ignore=release --ignore=\"启动.bat\" --ignore=\"启动.sh\"",
     "preview": "vite preview"
   },
   "dependencies": {
