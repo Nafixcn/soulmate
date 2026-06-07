@@ -17,11 +17,11 @@ if %errorlevel% neq 0 (
     pause
     exit /b 1
 )
-echo OK - Node.js found
+echo OK
 
 echo [2/3] Checking dependencies ...
 if not exist "node_modules\vite" (
-    echo Installing dependencies. Please wait...
+    echo Installing dependencies...
     call "%NODE_PATH%\npm.cmd" install
     if %errorlevel% neq 0 (
         echo [ERROR] Install failed!
@@ -29,18 +29,17 @@ if not exist "node_modules\vite" (
         exit /b 1
     )
 )
-echo OK - Dependencies ready
+echo OK
 
-echo [3/3] Starting server...
+echo [3/3] Starting app...
 echo.
-echo Opening http://localhost:5173
-echo If browser does not open, visit the URL manually
-echo Close this window to stop the server
+echo Close this window to stop the app
 echo =====================================
+
+start "" /B "%NODE_PATH%\node.exe" node_modules\vite\bin\vite.js >nul 2>&1
+ping -n 3 127.0.0.1 >nul
+start "" "%NODE_PATH%\node.exe" node_modules\electron\dist\electron.exe .
+
 echo.
-
-start "" http://localhost:5173
-
-call "node_modules\.bin\vite.cmd"
-
+echo App started! You can close this window.
 pause

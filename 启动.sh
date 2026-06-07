@@ -13,11 +13,11 @@ if ! command -v node &> /dev/null; then
     read -p "Press Enter to exit..."
     exit 1
 fi
-echo "OK - Node.js $(node --version)"
+echo "OK"
 
 echo "[2/3] Checking dependencies ..."
 if [ ! -d "node_modules/vite" ]; then
-    echo "Installing dependencies. Please wait..."
+    echo "Installing dependencies..."
     npm install
     if [ $? -ne 0 ]; then
         echo "[ERROR] Install failed!"
@@ -25,15 +25,13 @@ if [ ! -d "node_modules/vite" ]; then
         exit 1
     fi
 fi
-echo "OK - Dependencies ready"
+echo "OK"
 
-echo "[3/3] Starting server..."
-echo ""
-echo "Opening http://localhost:5173"
-echo "If browser does not open, visit the URL manually"
-echo "Press Ctrl+C to stop the server"
-echo "====================================="
+echo "[3/3] Starting app..."
 echo ""
 
-open http://localhost:5173 2>/dev/null &
-npx vite
+npx vite &
+sleep 2
+VITE_DEV_SERVER_URL=http://localhost:5173 npx electron .
+
+echo "App stopped."
