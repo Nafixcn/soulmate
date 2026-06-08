@@ -57,250 +57,39 @@ body {
 /* ========== CHAT BODY ========== */
 .chat-body { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
 
-/* ========== CHARACTER AVATAR ========== */
-.character-container {
-  height: 200px; flex-shrink: 0;
+/* ========== LIVE2D CHARACTER ========== */
+.live2d-container {
+  height: 320px; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
   background: linear-gradient(180deg, #fff0f5 0%, #fff8f3 60%, #fff8f3 100%);
   position: relative; overflow: hidden;
 }
-.character-wrapper {
-  width: 160px; height: 175px;
-  position: relative;
-  animation: breathe 4s ease-in-out infinite;
+.live2d-canvas {
+  width: 260px;
+  height: 320px;
+}
+.live2d-loading {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+}
+.live2d-loading-dot {
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: var(--accent-light);
+  animation: ld-bounce 1s ease-in-out infinite;
+}
+@keyframes ld-bounce {
+  0%, 100% { transform: scale(0.5); opacity: 0.3; }
+  50% { transform: scale(1); opacity: 1; }
+}
+.live2d-fallback {
+  display: flex; align-items: center; justify-content: center;
+  animation: breathe 3s ease-in-out infinite;
 }
 @keyframes breathe {
-  0%,100% { transform: translateY(0) scale(1); }
-  50% { transform: translateY(-3px) scale(1.02); }
-}
-.character-wrapper.speaking {
-  animation: breathe-speaking 1.2s ease-in-out infinite;
-}
-@keyframes breathe-speaking {
-  0%,100% { transform: translateY(0) scale(1); }
-  25% { transform: translateY(-2px) scale(1.01); }
-  75% { transform: translateY(1px) scale(0.99); }
-}
-
-/* Sparkles */
-.sparkle {
-  position: absolute; font-size: 16px;
-  animation: sparkle-float 2s ease-out forwards;
-  pointer-events: none; z-index: 10;
-}
-.s1 { top: 5px; left: 15px; animation-delay: 0s; }
-.s2 { top: 30px; right: 10px; animation-delay: 0.5s; }
-.s3 { top: 60px; left: 5px; animation-delay: 1s; }
-@keyframes sparkle-float {
-  0% { opacity: 1; transform: translateY(0) scale(0); }
-  30% { opacity: 1; transform: translateY(-20px) scale(1.2); }
-  100% { opacity: 0; transform: translateY(-40px) scale(0.5); }
-}
-
-/* Hair Back */
-.hair-back {
-  width: 130px; height: 110px;
-  border-radius: 80px 80px 50px 50px;
-  position: absolute; top: 10px; left: 15px;
-  z-index: 1;
-}
-
-/* Hair Side */
-.hair-side {
-  width: 28px; height: 70px;
-  border-radius: 0 0 14px 14px;
-  position: absolute; top: 32px; z-index: 4;
-}
-.hair-side-left { left: 20px; border-radius: 0 0 0 18px; }
-.hair-side-right { right: 20px; border-radius: 0 0 18px 0; }
-
-/* Face */
-.face {
-  width: 94px; height: 102px;
-  background: linear-gradient(175deg, #ffe4c4 0%, #fddcb5 50%, #f8d4a8 100%);
-  border-radius: 47px 47px 40px 40px;
-  position: absolute; bottom: 20px; left: 33px; z-index: 3;
-  box-shadow: inset 0 2px 8px rgba(0,0,0,0.04);
-}
-
-/* Blush */
-.blush {
-  width: 18px; height: 10px;
-  background: rgba(255,130,130,0.3);
-  border-radius: 50%;
-  position: absolute; top: 55px;
-  filter: blur(3px);
-}
-.blush-left { left: 8px; }
-.blush-right { right: 8px; }
-
-/* Nose */
-.nose {
-  width: 6px; height: 5px;
-  background: rgba(0,0,0,0.06);
-  border-radius: 50%;
-  position: absolute; top: 50px; left: 44px;
-}
-
-/* Eyebrows */
-.eyebrow {
-  width: 24px; height: 3px;
-  background: #555;
-  border-radius: 3px;
-  position: absolute; top: 35px;
-  transition: all 0.3s;
-}
-.eyebrow-left { left: 10px; transform: rotate(-2deg); }
-.eyebrow-right { right: 10px; transform: rotate(2deg); }
-
-/* Eyes */
-.eye {
-  width: 26px; height: 22px;
-  background: white;
-  border-radius: 50%;
-  position: absolute; top: 40px;
-  box-shadow: inset 0 1px 3px rgba(0,0,0,0.08);
-  overflow: hidden;
-  animation: blink 4s infinite;
-}
-.eye-left { left: 10px; }
-.eye-right { right: 10px; }
-@keyframes blink {
-  0%, 90%, 96%, 100% { transform: scaleY(1); }
-  93% { transform: scaleY(0.1); }
-}
-.character-wrapper.typing .eye { animation: blink-fast 1.5s infinite; }
-@keyframes blink-fast {
-  0%, 60%, 80%, 100% { transform: scaleY(1); }
-  70% { transform: scaleY(0.1); }
-}
-
-.eye-iris {
-  width: 20px; height: 20px;
-  border-radius: 50%;
-  position: absolute; top: 1px; left: 3px;
-  transition: transform 0.3s;
-}
-.eye-pupil {
-  width: 8px; height: 8px;
-  background: #1a1a2e;
-  border-radius: 50%;
-  position: absolute; top: 6px; left: 6px;
-}
-.eye-highlight {
-  width: 6px; height: 6px;
-  background: white;
-  border-radius: 50%;
-  position: absolute;
-}
-.hl1 { top: 2px; left: 10px; width: 5px; height: 5px; }
-.hl2 { top: 5px; left: 12px; width: 2px; height: 2px; }
-.eye-heart {
-  position: absolute; top: 2px; left: 4px;
-  font-size: 14px; color: #ff4070;
-  opacity: 0; transform: scale(0);
-  transition: all 0.3s;
-}
-
-/* Mouth */
-.mouth { position: absolute; top: 62px; left: 32px; width: 28px; height: 16px; }
-.mouth-default {
-  width: 16px; height: 4px;
-  border-bottom: 2.5px solid #d47a7a;
-  border-radius: 0 0 50% 50%;
-  margin: 6px auto 0;
-  transition: all 0.3s;
-}
-.mouth-happy {
-  width: 22px; height: 6px;
-  border-bottom: 2.5px solid #d47a7a;
-  border-radius: 0 0 60% 60%;
-  margin: 4px auto 0;
-  opacity: 0; transform: scale(0);
-  transition: all 0.3s;
-}
-.mouth-surprised {
-  width: 10px; height: 10px;
-  background: #3d2c34;
-  border-radius: 50%;
-  margin: 4px auto 0;
-  opacity: 0; transform: scale(0);
-  transition: all 0.3s;
-}
-.mouth-shy {
-  width: 20px; height: 5px;
-  border-bottom: 2.5px solid #d47a7a;
-  border-radius: 0 0 3px 3px;
-  position: absolute; top: 0; left: 4px;
-  opacity: 0; transform: scale(0) rotate(-5deg);
-  transition: all 0.3s;
-}
-.mouth-loving {
-  width: 14px; height: 5px;
-  background: #ff9090;
-  border-radius: 3px 3px 7px 7px;
-  margin: 6px auto 0;
-  opacity: 0; transform: scale(0);
-  transition: all 0.3s;
-}
-
-/* Expression States */
-.expression-happy .mouth-default { opacity: 0; transform: scale(0); }
-.expression-happy .mouth-happy { opacity: 1; transform: scale(1); }
-.expression-happy .eye { animation: blink 3s infinite; }
-.expression-happy .eye-iris { transform: translateY(-2px); }
-
-.expression-shy .mouth-default { opacity: 0; transform: scale(0); }
-.expression-shy .mouth-shy { opacity: 1; transform: scale(1) rotate(-3deg); }
-.expression-shy .blush { background: rgba(255,100,100,0.5); width: 20px; height: 12px; }
-.expression-shy .eye-iris { transform: translate(2px, -2px); }
-
-.expression-loving .mouth-default { opacity: 0; transform: scale(0); }
-.expression-loving .mouth-loving { opacity: 1; transform: scale(1); }
-.expression-loving .eye-heart { opacity: 1; transform: scale(1); }
-.expression-loving .eye-iris { transform: scale(0); }
-.expression-loving .blush { background: rgba(255,80,80,0.5); width: 22px; height: 14px; }
-
-.expression-surprised .mouth-default { opacity: 0; transform: scale(0); }
-.expression-surprised .mouth-surprised { opacity: 1; transform: scale(1); }
-.expression-surprised .eye { height: 26px; width: 28px; animation: none; }
-.expression-surprised .eye-iris { transform: translateY(-3px); }
-.expression-surprised .eyebrow { transform: rotate(0deg); top: 28px; }
-
-.expression-thinking .mouth-default { transform: translateX(5px); }
-.expression-thinking .eye-left { height: 20px; }
-.expression-thinking .eye-right { height: 24px; }
-.expression-thinking .eyebrow-left { transform: rotate(5deg); top: 33px; }
-.expression-thinking .eyebrow-right { transform: rotate(-15deg); top: 32px; }
-
-/* Hair Bangs */
-.hair-bangs {
-  width: 98px; height: 42px;
-  border-radius: 0 0 30px 30px;
-  position: absolute; top: 12px; left: 31px; z-index: 5;
-  box-shadow: inset 0 -2px 4px rgba(0,0,0,0.08);
-}
-.hair-strand {
-  position: absolute; border-radius: 0 0 50% 50%;
-}
-.h1 { width: 30px; height: 48px; left: 14px; top: -12px; transform: rotate(-5deg); z-index: 1; }
-.h2 { width: 20px; height: 40px; left: 38px; top: -8px; z-index: 2; }
-.h3 { width: 28px; height: 46px; right: 14px; top: -10px; transform: rotate(5deg); z-index: 1; }
-
-/* Ahoge */
-.ahoge {
-  width: 0; height: 0;
-  border-left: 5px solid transparent;
-  border-right: 5px solid transparent;
-  border-bottom: 18px solid #ff9fbf;
-  position: absolute; top: -2px; left: 75px;
-  border-radius: 2px; z-index: 6;
-  animation: ahoge-sway 3s ease-in-out infinite;
-  transform-origin: bottom center;
-}
-@keyframes ahoge-sway {
-  0%,100% { transform: rotate(-5deg); }
-  50% { transform: rotate(8deg); }
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-5px) scale(1.03); }
 }
 
 /* ========== ERROR ========== */

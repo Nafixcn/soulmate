@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useCallback } from 'react'
 import { useChatStore } from '../store/chatStore'
 import { useSettingsStore } from '../store/settingsStore'
-import { CharacterAvatar } from './CharacterAvatar'
+import { Live2DCharacter } from './Live2DCharacter'
 import { ChatHeader } from './ChatHeader'
 import { MessageBubble } from './MessageBubble'
 import { ChatInput } from './ChatInput'
@@ -59,7 +59,7 @@ export const ChatWindow: React.FC = () => {
       />
 
       <div className="chat-body">
-        <CharacterAvatar
+        <Live2DCharacter
           expression={expression}
           persona={persona}
           isSpeaking={isSpeaking}

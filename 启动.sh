@@ -15,6 +15,8 @@ if ! command -v node &> /dev/null; then
 fi
 echo "OK"
 
+export ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"
+
 echo "[2/3] Checking dependencies ..."
 if [ ! -d "node_modules/vite" ]; then
     echo "Installing dependencies..."
