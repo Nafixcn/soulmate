@@ -53,6 +53,14 @@ body {
 .header-desc { font-size: 11px; opacity: 0.85; margin-top: 2px; }
 .header-btn { background: rgba(255,255,255,0.25); border: none; color: white; width: 32px; height: 32px; border-radius: 50%; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.2s; }
 .header-btn:hover { background: rgba(255,255,255,0.4); }
+.header-btn:disabled { opacity: 0.5; cursor: default; }
+
+.wechat-user-info {
+  display: flex; align-items: center; gap: 6px;
+  margin-left: auto; margin-right: 4px;
+}
+.wechat-avatar { width: 24px; height: 24px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.6); }
+.wechat-nickname { font-size: 11px; color: white; max-width: 60px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ========== CHAT BODY ========== */
 .chat-body { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }

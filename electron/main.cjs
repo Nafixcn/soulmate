@@ -1,5 +1,6 @@
-const { app, BrowserWindow } = require('electron')
+const { app, BrowserWindow, ipcMain } = require('electron')
 const path = require('path')
+const { startAuthServer, getAuthPort, stopAuthServer } = require('./auth-server')
 
 let mainWindow
 
@@ -12,7 +13,8 @@ function createWindow() {
     title: '小希 - AI 电子女友',
     webPreferences: {
       nodeIntegration: false,
-      contextIsolation: true
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.cjs')
     }
   })
 
@@ -47,7 +49,21 @@ function createWindow() {
   })
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  // 启动本地回调服务器（微信登录用）
+  try {
+    await startAuthServer((user) => {
+      if (mainWindow) {
+        mainWindow.webContents.send('auth-success', user)
+      }
+    })
+    console.log('Auth server started on port', getAuthPort())
+  } catch (e) {
+    console.error('Failed to start auth server:', e)
+  }
+
+  ipcMain.handle('get-auth-port', () => getAuthPort())
+
   createWindow()
 
   app.on('activate', () => {
