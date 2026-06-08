@@ -7,8 +7,8 @@
     "dev": "vite",
     "dev:electron": "concurrently \"vite\" \"wait-on http://localhost:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .\"",
     "build": "vite build",
-    "build:win": "vite build && electron-packager . \"小希\" --out=release --overwrite --platform=win32 --arch=x64 --electron-version=28.3.3 --ignore=node_modules --ignore=src --ignore=public --ignore=.git --ignore=release --ignore=\"启动.bat\" --ignore=\"启动.sh\"",
-    "build:mac": "vite build && electron-packager . \"小希\" --out=release --overwrite --platform=darwin --arch=x64 --electron-version=28.3.3 --ignore=node_modules --ignore=src --ignore=public --ignore=.git --ignore=release --ignore=\"启动.bat\" --ignore=\"启动.sh\" && hdiutil create -volname \"小希\" -srcfolder \"release/小希-darwin-x64/小希.app\" -ov -format UDZO \"release/小希.dmg\"",
+    "build:win": "vite build && electron-packager . \"小希\" --out=release/win --overwrite --platform=win32 --arch=x64 --electron-version=28.3.3 --ignore=node_modules --ignore=src --ignore=public --ignore=.git --ignore=release --ignore=\"启动.bat\" --ignore=\"启动.sh\"",
+    "build:mac": "vite build && electron-packager . \"小希\" --out=release/mac --overwrite --platform=darwin --arch=x64 --electron-version=28.3.3 --ignore=node_modules --ignore=src --ignore=public --ignore=.git --ignore=release --ignore=\"启动.bat\" --ignore=\"启动.sh\" && hdiutil create -volname \"小希\" -srcfolder \"release/mac/小希-darwin-x64/小希.app\" -ov -format UDZO \"release/mac/小希.dmg\"",
     "preview": "vite preview"
   },
   "dependencies": {
