@@ -36,6 +36,11 @@ export interface TTSSettings {
   voiceURI: string
 }
 
+export const LIVE2D_MODELS: { name: string; path: string; sdk: 'cubism2' | 'cubism4' }[] = [
+  { name: 'Shizuku', path: './models/shizuku/shizuku.model.json', sdk: 'cubism2' },
+  { name: 'Haru (Cubism4)', path: './models/haru/haru.model3.json', sdk: 'cubism4' },
+]
+
 export const API_PRESETS: { name: string; endpoint: string; models: string[] }[] = [
   {
     name: 'SiliconFlow',
@@ -53,6 +58,11 @@ export const API_PRESETS: { name: string; endpoint: string; models: string[] }[]
     ]
   },
   {
+    name: 'DeepSeek',
+    endpoint: 'https://api.deepseek.com/v1/chat/completions',
+    models: ['deepseek-v4-pro', 'deepseek-v4-flash', 'deepseek-chat', 'deepseek-reasoner']
+  },
+  {
     name: 'OpenAI',
     endpoint: 'https://api.openai.com/v1/chat/completions',
     models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4.1', 'o3-mini', 'o4-mini']
@@ -61,11 +71,6 @@ export const API_PRESETS: { name: string; endpoint: string; models: string[] }[]
     name: 'Groq',
     endpoint: 'https://api.groq.com/openai/v1/chat/completions',
     models: ['llama-3.3-70b-versatile', 'llama-4-maverick-128k', 'deepseek-r1-distill-llama-70b']
-  },
-  {
-    name: 'DeepSeek',
-    endpoint: 'https://api.deepseek.com/v1/chat/completions',
-    models: ['deepseek-chat', 'deepseek-reasoner', 'deepseek-v4-pro', 'deepseek-v4-flash']
   },
   {
     name: '自定义',

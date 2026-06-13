@@ -1,11 +1,12 @@
 import React, { useRef, useEffect, useCallback, useState } from 'react'
 import * as PIXI from 'pixi.js'
-import { Expression, Persona } from '../types'
+import { Expression, Persona, LIVE2D_MODELS } from '../types'
+import { useSettingsStore } from '../store/settingsStore'
 
 (window as any).PIXI = PIXI
 
-const LIVE2D_SDK_URL = './live2d.min.js'
-const MODEL_URL = './models/shizuku/shizuku.model.json'
+const LIVE2D_SDK_C2 = './live2d.min.js'
+const LIVE2D_SDK_C4 = './live2dcubismcore.min.js'
 
 const EXPRESSION_MAP: Record<string, string> = {
   happy: 'f01',
@@ -15,7 +16,7 @@ const EXPRESSION_MAP: Record<string, string> = {
   thinking: 'f01',
 }
 
-const MOUTH_PARAM = 'PARAM_MOUTH_OPEN_Y'
+const MOUTH_PARAM = 'ParamMouthOpenY'
 
 interface Props {
   expression: Expression
@@ -24,36 +25,38 @@ interface Props {
   isTyping: boolean
 }
 
-let sdkLoaded = false
-let sdkLoading: Promise<void> | null = null
+let sdkCache: Record<string, true> = {}
+let sdkLoading: Record<string, Promise<void> | undefined> = {}
 
-function loadSdk(): Promise<void> {
-  if (sdkLoaded) return Promise.resolve()
-  if (sdkLoading) return sdkLoading
+function loadSdk(url: string, globalKey: string): Promise<void> {
+  if (sdkCache[url]) return Promise.resolve()
+  if (sdkLoading[url]) return sdkLoading[url]!
 
-  if ((window as any).Live2D) {
-    sdkLoaded = true
+  if ((window as any)[globalKey]) {
+    sdkCache[url] = true
     return Promise.resolve()
   }
 
-  sdkLoading = new Promise((resolve, reject) => {
+  sdkLoading[url] = new Promise((resolve, reject) => {
     const script = document.createElement('script')
-    script.src = LIVE2D_SDK_URL
+    script.src = url
     script.onload = () => {
-      sdkLoaded = true
+      sdkCache[url] = true
       resolve()
     }
     script.onerror = () => {
-      sdkLoading = null
-      reject(new Error('Live2D SDK load failed'))
+      delete sdkLoading[url]
+      reject(new Error(`SDK load failed: ${url}`))
     }
     document.head.appendChild(script)
   })
 
-  return sdkLoading
+  return sdkLoading[url]
 }
 
 export const Live2DCharacter: React.FC<Props> = ({ expression, persona, isSpeaking, isTyping }) => {
+  const modelIndex = useSettingsStore(s => s.live2dModelIndex)
+  const modelConfig = LIVE2D_MODELS[modelIndex] || LIVE2D_MODELS[0]
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const appRef = useRef<PIXI.Application | null>(null)
   const modelRef = useRef<any>(null)
@@ -84,6 +87,21 @@ export const Live2DCharacter: React.FC<Props> = ({ expression, persona, isSpeaki
     speakingRef.current = isSpeaking
   }, [isSpeaking])
 
+  // 切换模型时重新加载
+  useEffect(() => {
+    initRef.current = false
+    mountRef.current = false
+    if (modelRef.current) {
+      modelRef.current.destroy()
+      modelRef.current = null
+    }
+    if (appRef.current) {
+      appRef.current.destroy(true)
+      appRef.current = null
+    }
+    setFallback(false)
+  }, [modelIndex])
+
   useEffect(() => {
     if (initRef.current) return
     initRef.current = true
@@ -103,10 +121,13 @@ export const Live2DCharacter: React.FC<Props> = ({ expression, persona, isSpeaki
     })
     appRef.current = app
 
-    loadSdk()
-      .then(() => import('pixi-live2d-display/cubism2'))
-      .then(({ Live2DModel }) => Live2DModel.from(MODEL_URL) as Promise<any>)
-      .then((model) => {
+    const sdkUrl = modelConfig.sdk === 'cubism4' ? LIVE2D_SDK_C4 : LIVE2D_SDK_C2
+    const sdkKey = modelConfig.sdk === 'cubism4' ? 'Live2DCubismCore' : 'Live2D'
+
+    loadSdk(sdkUrl, sdkKey)
+      .then(() => import(`pixi-live2d-display/${modelConfig.sdk === 'cubism4' ? 'cubism4' : 'cubism2'}`))
+      .then(({ Live2DModel }) => (Live2DModel as any).from(modelConfig.path) as Promise<any>)
+      .then((model: any) => {
         if (!mountRef.current) {
           model.destroy()
           return
@@ -121,7 +142,7 @@ export const Live2DCharacter: React.FC<Props> = ({ expression, persona, isSpeaki
         app.stage.addChild(model)
         applyExpression(model, expression)
       })
-      .catch((err) => {
+      .catch((err: Error) => {
         console.warn('Live2D load failed, using fallback:', err.message)
         setFallback(true)
       })
@@ -140,14 +161,8 @@ export const Live2DCharacter: React.FC<Props> = ({ expression, persona, isSpeaki
 
     return () => {
       mountRef.current = false
-      if (modelRef.current) {
-        modelRef.current.destroy()
-        modelRef.current = null
-      }
-      app.destroy(true)
-      appRef.current = null
     }
-  }, [])
+  }, [modelIndex])
 
   if (fallback) {
     return <CharacterAvatarFallback expression={expression} persona={persona} isSpeaking={isSpeaking} isTyping={isTyping} />

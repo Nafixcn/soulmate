@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react'
 import { useSettingsStore } from '../store/settingsStore'
-import { API_PRESETS } from '../types'
+import { API_PRESETS, LIVE2D_MODELS } from '../types'
 import { getVoices } from '../services/ttsService'
 
 interface Props {
@@ -8,7 +8,7 @@ interface Props {
 }
 
 export const SettingsPanel: React.FC<Props> = ({ onClose }) => {
-  const { aiSettings, ttsSettings, setAISettings, setTTSSettings, applyPreset } = useSettingsStore()
+  const { aiSettings, ttsSettings, live2dModelIndex, setAISettings, setTTSSettings, applyPreset, setLive2dModelIndex } = useSettingsStore()
   const [presetIndex, setPresetIndex] = React.useState(() => {
     const idx = API_PRESETS.findIndex(p => p.endpoint === aiSettings.endpoint)
     return idx >= 0 ? idx : API_PRESETS.length - 1
@@ -52,6 +52,18 @@ export const SettingsPanel: React.FC<Props> = ({ onClose }) => {
         <div className="settings-body">
           {tab === 'ai' && (
             <div className="settings-section">
+              <div className="form-group">
+                <label>Live2D 模型</label>
+                <select
+                  value={live2dModelIndex}
+                  onChange={e => setLive2dModelIndex(parseInt(e.target.value))}
+                >
+                  {LIVE2D_MODELS.map((m, i) => (
+                    <option key={i} value={i}>{m.name}</option>
+                  ))}
+                </select>
+              </div>
+
               <div className="form-group">
                 <label>API 服务商</label>
                 <select

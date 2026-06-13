@@ -5,10 +5,12 @@ interface SettingsStore {
   aiSettings: AISettings
   ttsSettings: TTSSettings
   aiConfigured: boolean
+  live2dModelIndex: number
 
   setAISettings: (s: Partial<AISettings>) => void
   setTTSSettings: (s: Partial<TTSSettings>) => void
   applyPreset: (index: number) => void
+  setLive2dModelIndex: (index: number) => void
   loadFromStorage: () => void
   saveToStorage: () => void
 }
@@ -33,6 +35,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
   aiSettings: defaultAI,
   ttsSettings: defaultTTS,
   aiConfigured: false,
+  live2dModelIndex: 0,
 
   setAISettings: (partial) => {
     set(s => ({
@@ -60,6 +63,11 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     get().saveToStorage()
   },
 
+  setLive2dModelIndex: (index) => {
+    set({ live2dModelIndex: index })
+    get().saveToStorage()
+  },
+
   loadFromStorage: () => {
     try {
       const raw = localStorage.getItem('lt_settings')
@@ -68,14 +76,15 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
         set({
           aiSettings: { ...defaultAI, ...data.aiSettings },
           ttsSettings: { ...defaultTTS, ...data.ttsSettings },
-          aiConfigured: !!(data.aiSettings?.apiKey)
+          aiConfigured: !!(data.aiSettings?.apiKey),
+          live2dModelIndex: data.live2dModelIndex ?? 0,
         })
       }
     } catch {}
   },
 
   saveToStorage: () => {
-    const { aiSettings, ttsSettings } = get()
-    localStorage.setItem('lt_settings', JSON.stringify({ aiSettings, ttsSettings }))
+    const { aiSettings, ttsSettings, live2dModelIndex } = get()
+    localStorage.setItem('lt_settings', JSON.stringify({ aiSettings, ttsSettings, live2dModelIndex }))
   }
 }))
