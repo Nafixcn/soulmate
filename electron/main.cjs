@@ -26,6 +26,24 @@ function createWindow() {
     callback({ requestHeaders: details.requestHeaders })
   })
 
+  // 处理 CORS 预检请求
+  mainWindow.webContents.session.webRequest.onBeforeRequest((details, callback) => {
+    if (details.method === 'OPTIONS') {
+      callback({
+        cancel: false,
+        redirectURL: undefined,
+        statusLine: 'HTTP/1.1 200 OK',
+        responseHeaders: {
+          'Access-Control-Allow-Origin': [details.requestHeaders['Origin'] || '*'],
+          'Access-Control-Allow-Headers': ['*'],
+          'Access-Control-Allow-Methods': ['GET, POST, OPTIONS'],
+        }
+      })
+      return
+    }
+    callback({})
+  })
+
   mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
     callback({
       responseHeaders: {
