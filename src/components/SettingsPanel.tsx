@@ -9,7 +9,10 @@ interface Props {
 
 export const SettingsPanel: React.FC<Props> = ({ onClose }) => {
   const { aiSettings, ttsSettings, setAISettings, setTTSSettings, applyPreset } = useSettingsStore()
-  const [presetIndex, setPresetIndex] = React.useState(0)
+  const [presetIndex, setPresetIndex] = React.useState(() => {
+    const idx = API_PRESETS.findIndex(p => p.endpoint === aiSettings.endpoint)
+    return idx >= 0 ? idx : API_PRESETS.length - 1
+  })
   const [tab, setTab] = React.useState<'ai' | 'tts' | 'about'>('ai')
   const [voices, setVoices] = React.useState<SpeechSynthesisVoice[]>([])
 
@@ -29,6 +32,8 @@ export const SettingsPanel: React.FC<Props> = ({ onClose }) => {
     window.speechSynthesis.cancel()
     window.speechSynthesis.speak(utterance)
   }
+
+  const isCustom = presetIndex >= API_PRESETS.length - 1
 
   return (
     <div className="settings-overlay" onClick={onClose}>
@@ -71,10 +76,9 @@ export const SettingsPanel: React.FC<Props> = ({ onClose }) => {
                   value={aiSettings.apiKey}
                   onChange={e => setAISettings({ apiKey: e.target.value })}
                 />
-
               </div>
 
-              {presetIndex === 2 && (
+              {isCustom && (
                 <div className="form-group">
                   <label>API 接口地址</label>
                   <input
@@ -87,17 +91,18 @@ export const SettingsPanel: React.FC<Props> = ({ onClose }) => {
 
               <div className="form-group">
                 <label>模型</label>
-                <select
+                <input
+                  className="model-input"
+                  placeholder="输入模型名，如 deepseek-ai/DeepSeek-V3"
                   value={aiSettings.model}
                   onChange={e => setAISettings({ model: e.target.value })}
-                >
-                  {(API_PRESETS[presetIndex].models.length > 0
-                    ? API_PRESETS[presetIndex].models
-                    : [aiSettings.model]
-                  ).map(m => (
-                    <option key={m} value={m}>{m}</option>
+                  list="model-list"
+                />
+                <datalist id="model-list">
+                  {API_PRESETS[presetIndex].models.map(m => (
+                    <option key={m} value={m} />
                   ))}
-                </select>
+                </datalist>
               </div>
 
               <div className="form-row">

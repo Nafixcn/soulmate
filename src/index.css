@@ -55,6 +55,19 @@ body {
 .header-btn:hover { background: rgba(255,255,255,0.4); }
 .header-btn:disabled { opacity: 0.5; cursor: default; }
 
+.model-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  background: white;
+  transition: border-color 0.2s;
+}
+.model-input:focus { border-color: var(--accent); }
+
 .wechat-user-info {
   display: flex; align-items: center; gap: 6px;
   margin-left: auto; margin-right: 4px;
