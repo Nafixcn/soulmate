@@ -65,7 +65,7 @@ export const API_PRESETS: { name: string; endpoint: string; models: string[] }[]
   {
     name: 'DeepSeek',
     endpoint: 'https://api.deepseek.com/v1/chat/completions',
-    models: ['deepseek-chat', 'deepseek-reasoner']
+    models: ['deepseek-chat', 'deepseek-reasoner', 'deepseek-v4-pro', 'deepseek-v4-flash']
   },
   {
     name: '自定义',
