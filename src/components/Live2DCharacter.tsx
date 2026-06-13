@@ -124,8 +124,16 @@ export const Live2DCharacter: React.FC<Props> = ({ expression, persona, isSpeaki
     const sdkUrl = modelConfig.sdk === 'cubism4' ? LIVE2D_SDK_C4 : LIVE2D_SDK_C2
     const sdkKey = modelConfig.sdk === 'cubism4' ? 'Live2DCubismCore' : 'Live2D'
 
-    loadSdk(sdkUrl, sdkKey)
-      .then(() => import(`pixi-live2d-display/${modelConfig.sdk === 'cubism4' ? 'cubism4' : 'cubism2'}`))
+    // 预加载两个 SDK 避免 import 时找不到运行时
+    const sdkPromise = modelConfig.sdk === 'cubism4'
+      ? loadSdk(LIVE2D_SDK_C4, 'Live2DCubismCore')
+      : Promise.all([
+          loadSdk(LIVE2D_SDK_C2, 'Live2D'),
+          loadSdk(LIVE2D_SDK_C4, 'Live2DCubismCore'),
+        ]).then(() => {})
+
+    sdkPromise
+      .then(() => import('pixi-live2d-display'))
       .then(({ Live2DModel }) => (Live2DModel as any).from(modelConfig.path) as Promise<any>)
       .then((model: any) => {
         if (!mountRef.current) {
