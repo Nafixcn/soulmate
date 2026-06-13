@@ -20,7 +20,7 @@ let cachedTips: TipsData | null = null
 
 export async function loadTips(): Promise<TipsData> {
   if (cachedTips) return cachedTips
-  const resp = await fetch('/waifu-tips.json')
+  const resp = await fetch('./waifu-tips.json')
   cachedTips = await resp.json()
   return cachedTips!
 }

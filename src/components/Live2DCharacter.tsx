@@ -104,7 +104,7 @@ export const Live2DCharacter: React.FC<Props> = ({ expression, persona, isSpeaki
     appRef.current = app
 
     loadSdk()
-      .then(() => import('pixi-live2d-display'))
+      .then(() => import('pixi-live2d-display/cubism2'))
       .then(({ Live2DModel }) => Live2DModel.from(MODEL_URL) as Promise<any>)
       .then((model) => {
         if (!mountRef.current) {
