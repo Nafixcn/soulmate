@@ -37,7 +37,7 @@ export async function callAI(
   messages: Message[],
   persona: Persona,
   settings: AISettings
-): Promise<{ content: string; expression: Expression }> {
+): Promise<{ content: string; thinking?: string; expression: Expression }> {
   if (!settings.apiKey || !settings.endpoint) {
     return getFallbackReply(messages[0]?.content || '', persona)
   }
@@ -76,8 +76,10 @@ export async function callAI(
     }
 
     const data = await response.json()
-    const content = data.choices?.[0]?.message?.content || '...'
-    return { content, expression: detectExpression(content) }
+    const msg = data.choices?.[0]?.message
+    const content = msg?.content || '...'
+    const thinking = msg?.reasoning_content || ''
+    return { content, thinking, expression: detectExpression(content) }
   } catch (error: any) {
     if (error.name === 'AbortError') {
       throw new Error('AI调用超时(30s)，请检查网络和API地址')
@@ -96,7 +98,7 @@ function detectExpression(text: string): Expression {
   return 'neutral'
 }
 
-function getFallbackReply(input: string, persona: Persona): { content: string; expression: Expression } {
+function getFallbackReply(input: string, persona: Persona): { content: string; thinking?: string; expression: Expression } {
   const replies: Record<string, { texts: string[]; expr: Expression }> = {
     '你好|嗨|hi|在吗': {
       texts: [

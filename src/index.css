@@ -176,6 +176,31 @@ body {
 .tts-play-btn:hover { opacity: 1; }
 .tts-play-btn.playing { background: var(--accent-light); opacity: 1; }
 
+.thinking-block {
+  margin-bottom: 6px;
+}
+.thinking-header {
+  font-size: 11px;
+  color: var(--accent);
+  cursor: pointer;
+  padding: 3px 0;
+  user-select: none;
+  display: flex; align-items: center; gap: 4px;
+}
+.thinking-header:hover { opacity: 0.8; }
+.thinking-body {
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: #fafafa;
+  border-left: 2px solid var(--accent-light);
+  padding: 6px 10px;
+  border-radius: 0 6px 6px 0;
+  margin: 2px 0 4px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 /* Typing */
 .typing-indicator { display: flex; align-items: center; gap: 8px; padding: 4px 0; margin-bottom: 8px; }
 .typing-dots { display: flex; gap: 4px; padding: 8px 14px; background: white; border-radius: 16px; box-shadow: var(--shadow); }

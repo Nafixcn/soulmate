@@ -69,6 +69,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         id: (Date.now() + 1).toString(),
         role: 'assistant',
         content: result.content,
+        thinking: result.thinking,
         timestamp: Date.now()
       }
 

@@ -11,6 +11,7 @@ interface Props {
 export const MessageBubble: React.FC<Props> = ({ message, persona, ttsSettings }) => {
   const isUser = message.role === 'user'
   const [isPlaying, setIsPlaying] = React.useState(false)
+  const [thinkingOpen, setThinkingOpen] = React.useState(true)
   const time = new Date(message.timestamp).toLocaleTimeString('zh-CN', {
     hour: '2-digit',
     minute: '2-digit'
@@ -35,6 +36,19 @@ export const MessageBubble: React.FC<Props> = ({ message, persona, ttsSettings }
         </div>
       )}
       <div className="msg-content">
+        {message.thinking && (
+          <div className="thinking-block">
+            <div
+              className="thinking-header"
+              onClick={() => setThinkingOpen(!thinkingOpen)}
+            >
+              <span>{thinkingOpen ? '▾' : '▸'} 思考过程</span>
+            </div>
+            {thinkingOpen && (
+              <div className="thinking-body">{message.thinking}</div>
+            )}
+          </div>
+        )}
         <div className="msg-bubble-wrapper">
           <div className={`msg-bubble ${isUser ? 'user-bubble' : 'ai-bubble'}`}>
             {message.content}
