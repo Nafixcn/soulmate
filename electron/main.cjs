@@ -19,8 +19,9 @@ function createWindow() {
   })
 
   mainWindow.webContents.session.webRequest.onBeforeSendHeaders((details, callback) => {
-    if (details.requestHeaders['Origin']) {
-      details.requestHeaders['Origin'] = details.url
+    const origin = details.requestHeaders['Origin']
+    if (origin === 'file://' || origin === 'null') {
+      delete details.requestHeaders['Origin']
     }
     callback({ requestHeaders: details.requestHeaders })
   })
