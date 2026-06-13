@@ -19,7 +19,7 @@ interface ChatStore {
 }
 
 const defaultPersona: Persona = {
-  name: '小希',
+  name: '灵伴',
   age: 20,
   personality: '温柔体贴',
   hobby: '看电影、听音乐',

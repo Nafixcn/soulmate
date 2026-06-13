@@ -24,7 +24,7 @@ export const SettingsPanel: React.FC<Props> = ({ onClose }) => {
   }, [])
 
   const testTTS = () => {
-    const utterance = new SpeechSynthesisUtterance('哥哥你好呀，我是小希~')
+    const utterance = new SpeechSynthesisUtterance('哥哥你好呀，我是灵伴~')
     const voice = voices.find(v => v.voiceURI === ttsSettings.voiceURI)
     if (voice) utterance.voice = voice
     utterance.rate = ttsSettings.rate
@@ -201,7 +201,7 @@ export const SettingsPanel: React.FC<Props> = ({ onClose }) => {
           {tab === 'about' && (
             <div className="settings-section about-section">
               <div className="about-emoji">🌸</div>
-              <h3>小希 - AI 电子女友</h3>
+              <h3>灵伴 SoulMate</h3>
               <p>版本 2.0</p>
               <div className="about-features">
                 <div className="feature-item">

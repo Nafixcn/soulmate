@@ -10,7 +10,7 @@ function createWindow() {
     height: 780,
     minWidth: 360,
     minHeight: 600,
-    title: '小希 - AI 电子女友',
+    title: '灵伴 SoulMate',
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,

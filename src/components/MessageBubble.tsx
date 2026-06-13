@@ -11,7 +11,7 @@ interface Props {
 export const MessageBubble: React.FC<Props> = ({ message, persona, ttsSettings }) => {
   const isUser = message.role === 'user'
   const [isPlaying, setIsPlaying] = React.useState(false)
-  const [thinkingOpen, setThinkingOpen] = React.useState(true)
+  const [thinkingOpen, setThinkingOpen] = React.useState(false)
   const time = new Date(message.timestamp).toLocaleTimeString('zh-CN', {
     hour: '2-digit',
     minute: '2-digit'
