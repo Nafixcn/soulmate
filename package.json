@@ -8,7 +8,7 @@
     "dev:electron": "concurrently \"vite\" \"wait-on http://localhost:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .\"",
     "build": "vite build",
     "build:win": "vite build && electron-packager . \"灵伴\" --out=release/win --overwrite --platform=win32 --arch=x64 --electron-version=28.3.3 --ignore=node_modules --ignore=src --ignore=public --ignore=.git --ignore=release --ignore=\"启动.bat\" --ignore=\"启动.sh\"",
-    "build:mac": "vite build && electron-packager . \"灵伴\" --out=release/mac --overwrite --platform=darwin --arch=x64 --electron-version=28.3.3 --ignore=node_modules --ignore=src --ignore=public --ignore=.git --ignore=release --ignore=\"启动.bat\" --ignore=\"启动.sh\" && hdiutil create -volname \"灵伴\" -srcfolder \"release/mac/灵伴-darwin-x64/灵伴.app\" -ov -format UDZO \"release/mac/灵伴.dmg\"",
+    "build:mac": "vite build && electron-packager . \"灵伴\" --out=release/mac --overwrite --platform=darwin --arch=x64 --electron-version=28.3.3 --ignore=node_modules --ignore=src --ignore=public --ignore=.git --ignore=release --ignore=\"启动.bat\" --ignore=\"启动.sh\" && cp app-icon.icns \"release/mac/灵伴-darwin-x64/灵伴.app/Contents/Resources/electron.icns\" && hdiutil create -volname \"灵伴\" -srcfolder \"release/mac/灵伴-darwin-x64/灵伴.app\" -ov -format UDZO \"release/mac/灵伴.dmg\"",
     "preview": "vite preview"
   },
   "dependencies": {
