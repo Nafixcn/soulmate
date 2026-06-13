@@ -52,6 +52,8 @@ export async function callAI(
   ]
 
   try {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 30000)
     const response = await fetch(settings.endpoint, {
       method: 'POST',
       headers: {
@@ -63,8 +65,10 @@ export async function callAI(
         messages: apiMessages,
         temperature: settings.temperature,
         max_tokens: settings.maxTokens
-      })
+      }),
+      signal: controller.signal,
     })
+    clearTimeout(timeout)
 
     if (!response.ok) {
       const errText = await response.text()
@@ -75,6 +79,9 @@ export async function callAI(
     const content = data.choices?.[0]?.message?.content || '...'
     return { content, expression: detectExpression(content) }
   } catch (error: any) {
+    if (error.name === 'AbortError') {
+      throw new Error('AI调用超时(30s)，请检查网络和API地址')
+    }
     throw new Error(`AI调用失败: ${error.message}`)
   }
 }
