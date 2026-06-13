@@ -4,8 +4,8 @@ import { Expression, Persona } from '../types'
 
 (window as any).PIXI = PIXI
 
-const LIVE2D_SDK_URL = 'https://cdn.jsdelivr.net/gh/dylanNew/live2d/webgl/Live2D/lib/live2d.min.js'
-const MODEL_URL = 'https://cdn.jsdelivr.net/gh/guansss/pixi-live2d-display@master/test/assets/shizuku/shizuku.model.json'
+const LIVE2D_SDK_URL = '/live2d.min.js'
+const MODEL_URL = '/models/shizuku/shizuku.model.json'
 
 const EXPRESSION_MAP: Record<string, string> = {
   happy: 'f01',
