@@ -55,7 +55,7 @@ export const API_PRESETS: { name: string; endpoint: string; models: string[] }[]
   {
     name: 'OpenAI',
     endpoint: 'https://api.openai.com/v1/chat/completions',
-    models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'o3-mini', 'o4-mini']
+    models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4.1', 'o3-mini', 'o4-mini']
   },
   {
     name: 'Groq',

@@ -93,16 +93,27 @@ export const SettingsPanel: React.FC<Props> = ({ onClose }) => {
                 <label>模型</label>
                 <input
                   className="model-input"
-                  placeholder="输入模型名，如 deepseek-ai/DeepSeek-V3"
+                  placeholder="输入模型名或选择推荐"
                   value={aiSettings.model}
                   onChange={e => setAISettings({ model: e.target.value })}
                   list="model-list"
                 />
                 <datalist id="model-list">
-                  {API_PRESETS[presetIndex].models.map(m => (
+                  {API_PRESETS.flatMap(p => p.models).map(m => (
                     <option key={m} value={m} />
                   ))}
                 </datalist>
+                <div className="model-tags">
+                  {API_PRESETS[presetIndex].models.map(m => (
+                    <button
+                      key={m}
+                      className={`tag ${aiSettings.model === m ? 'active' : ''}`}
+                      onClick={() => setAISettings({ model: m })}
+                    >
+                      {m.length > 25 ? m.slice(-20) : m}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div className="form-row">
