@@ -72,7 +72,7 @@ export async function callAI(
 
     if (!response.ok) {
       const errText = await response.text()
-      throw new Error(`API Error ${response.status}: ${errText}`)
+      throw new Error(`API ${response.status}: ${settings.endpoint}\n${errText || '(空响应)'}`)
     }
 
     const data = await response.json()
