@@ -794,42 +794,5 @@
       }
     }
   },
-  "models": [
-    {
-      "name": "梦梦奈",
-      "paths": [
-        "https://cdn.sentnet.top/resources/live2d/model/momona/momona-default-pink/momona-default-v4.model3.json",
-        "https://cdn.sentnet.top/resources/live2d/model/momona/momona-maid-pink/momona_maid_v4.model3.json",
-        "https://cdn.sentnet.top/resources/live2d/model/momona/momona-pajamas-pink/momona_pajamas_v4.model3.json",
-        "https://cdn.sentnet.top/resources/live2d/model/momona/momona-sailor-blue/momona_sailor_v4.model3.json",
-        "https://cdn.sentnet.top/resources/live2d/model/momona/momona-spring-pink/momona_spring_v4.model3.json",
-        "https://cdn.sentnet.top/resources/live2d/model/momona/momona-summer2021-4-blue/momona_summer2021_v4.model3.json"
-      ],
-      "message": "是 梦梦奈 哦 ~"
-    },
-    {
-      "name": "HyperdimensionNeptunia",
-      "paths": [
-        "https://cdn.sentnet.top/resources/live2d/model/HyperdimensionNeptunia/nepgear/index.json",
-        "https://cdn.sentnet.top/resources/live2d/model/HyperdimensionNeptunia/nepgear_extra/index.json",
-        "https://cdn.sentnet.top/resources/live2d/model/HyperdimensionNeptunia/nepgearswim/index.json"
-      ],
-      "message": "nepgear!"
-    },
-    {
-      "name": "22",
-      "paths": [
-        "https://cdn.sentnet.top/resources/live2d/model/bilibili-live/22/index.json",
-        "https://cdn.sentnet.top/resources/live2d/model/bilibili-live/33/index.json"
-      ],
-      "message": "是 22 哦 ~"
-    },
-    {
-      "name": "Pio",
-      "paths": [
-        "https://cdn.sentnet.top/resources/live2d/model/Potion-Maker/Pio/index.json"
-      ],
-      "message": "是 Pio 哦 ~"
-    }
-  ]
+  "models": []
 }
