@@ -1,8 +1,0 @@
-name = "wechat-auth"
-main = "worker.js"
-compatibility_date = "2025-01-01"
-
-[vars]
-# 在 Cloudflare Dashboard 设置: wechat-login > Settings > Variables
-WECHAT_APPID = "your_appid_here"
-WECHAT_SECRET = "your_secret_here"
