@@ -1,8 +1,7 @@
 import React from 'react'
 import { Persona } from '../types'
 import { WeChatLogin } from './WeChatLogin'
-
-const WECHAT_APPID = 'wx_your_appid_here'
+import { WECHAT_APPID } from '../config/wechat'
 
 interface Props {
   persona: Persona

@@ -41,7 +41,7 @@ export default {
         avatar: encodeURIComponent(userData.headimgurl || ''),
       })
 
-      return Response.redirect(`http://localhost:${state}?${params.toString()}`)
+      return Response.redirect(`http://localhost:${state}/callback?${params.toString()}`)
     }
 
     return Response.json({ status: 'wechat-auth-worker' })

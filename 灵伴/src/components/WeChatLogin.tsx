@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react'
 import { useAuthStore } from '../store/authStore'
+import { WECHAT_WORKER } from '../config/wechat'
 
 interface Props {
   appid: string
@@ -18,7 +19,7 @@ export const WeChatLogin: React.FC<Props> = ({ appid }) => {
     if (!appid || !port) return
     setLoggingIn(true)
 
-    const redirectUri = encodeURIComponent('https://YOUR_WORKER.workers.dev/callback')
+    const redirectUri = encodeURIComponent(`https://${WECHAT_WORKER}/callback`)
     window.open(`https://open.weixin.qq.com/connect/oauth2/authorize?appid=${appid}&redirect_uri=${redirectUri}&response_type=code&scope=snsapi_userinfo&state=${port}#wechat_redirect`, '_blank')
   }
 
