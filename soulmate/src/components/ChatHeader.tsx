@@ -10,7 +10,7 @@ interface Props {
   onClearChat: () => void
 }
 
-const stageConfig: Record<string, { icon: React.FC<{size?:number}>, color: string; label: string }> = {
+const stageConfig: Record<string, { icon: React.ComponentType<{size?: number}>, color: string; label: string }> = {
   '刚认识': { icon: MessageCircle, color: '#8b9dc3', label: '刚认识' },
   '朋友': { icon: Sparkles, color: '#7ec8a0', label: '朋友' },
   '暧昧': { icon: Heart, color: '#f0a0b0', label: '暧昧' },

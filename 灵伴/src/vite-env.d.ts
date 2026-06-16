@@ -19,8 +19,4 @@ interface SpeechRecognition extends EventTarget {
 interface Window {
   SpeechRecognition?: new () => SpeechRecognition
   webkitSpeechRecognition?: new () => SpeechRecognition
-  wechatAuth?: {
-    getPort: () => Promise<number>
-    onLoginSuccess: (fn: (user: import('./store/authStore').WeChatUser) => void) => void
-  }
 }
