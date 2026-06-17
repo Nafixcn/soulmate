@@ -3,7 +3,7 @@ import { TTSSettings } from '../types'
 let cachedVoices: SpeechSynthesisVoice[] = []
 
 if (typeof window !== 'undefined') {
-  window.speechSynthesis.onvoiceschanged = () => { cachedVoices = [] }
+  window.speechSynthesis.addEventListener('voiceschanged', () => { cachedVoices = [] })
 }
 
 export function getVoices(): SpeechSynthesisVoice[] {

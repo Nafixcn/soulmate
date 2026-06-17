@@ -23,9 +23,11 @@ pub fn run() {
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
-            let app_dir = app.path().app_data_dir().unwrap();
+            let app_dir = app.path().app_data_dir()
+                .expect("无法获取应用数据目录");
             std::fs::create_dir_all(&app_dir).ok();
-            let conn = db::init_db(&app_dir.join("soulmate.db")).map_err(|e| e.to_string()).unwrap();
+            let conn = db::init_db(&app_dir.join("soulmate.db"))
+                .expect("数据库初始化失败");
             let state = AppState {
                 db: Mutex::new(conn),
                 auth_server: Mutex::new(None),
@@ -33,17 +35,19 @@ pub fn run() {
             app.manage(state);
 
             let server = auth::start_auth_server(app.handle().clone())
-                .map_err(|e| e.to_string()).unwrap();
-            *app.state::<AppState>().auth_server.lock().unwrap() = Some(server);
+                .expect("认证服务启动失败");
+            *app.state::<AppState>().auth_server.lock()
+                .expect("认证服务锁获取失败") = Some(server);
 
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             ai::send_message,
             db::get_messages,
+            db::save_message,
             db::clear_messages,
             get_auth_port,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .expect("应用启动失败");
 }

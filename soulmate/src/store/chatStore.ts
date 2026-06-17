@@ -51,7 +51,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     try {
       const msgs = await invoke<Message[]>('get_messages')
       set({ messages: msgs })
-    } catch {}
+    } catch {
+      set({ error: '加载历史消息失败' })
+    }
   },
 
   sendMessage: async (content, aiSettings, ttsSettings) => {
@@ -71,6 +73,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       streamingContent: '',
       streamingThinking: '',
     })
+
+    invoke('save_message', { message: userMsg }).catch(() => {})
 
     try {
       const systemPrompt = buildSystemPrompt(state.persona)
@@ -106,6 +110,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
             expression: detectExpression(fullContent),
           }))
 
+          invoke('save_message', { message: aiMsg }).catch(() => {})
+
           if (ttsSettings.autoPlay && ttsSettings.enabled) {
             set({ isSpeaking: true })
             speak(fullContent, ttsSettings).finally(() => set({ isSpeaking: false }))
@@ -125,6 +131,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         apiKey: aiSettings.apiKey,
         endpoint: aiSettings.endpoint,
         model: aiSettings.model,
+        temperature: aiSettings.temperature,
+        maxTokens: aiSettings.maxTokens,
         onChunk,
       })
     } catch (error: unknown) {
@@ -139,7 +147,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
   clearChat: async () => {
     stopSpeaking()
-    try { await invoke('clear_messages') } catch {}
+    invoke('clear_messages').catch(() => {})
     set({ messages: [], expression: 'neutral', error: null })
   },
 }))

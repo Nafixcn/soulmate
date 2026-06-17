@@ -4,3 +4,8 @@ release/
 target/
 .DS_Store
 *.log
+.env
+.env.local
+*.swp
+*.swo
+src-tauri/gen/

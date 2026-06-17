@@ -21,6 +21,14 @@ impl AuthServer {
     }
 }
 
+fn html_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#x27;")
+}
+
 pub fn start_auth_server(app: AppHandle) -> Result<AuthServer, String> {
     let listener = TcpListener::bind("127.0.0.1:0").map_err(|e| e.to_string())?;
     let port = listener.local_addr().map_err(|e| e.to_string())?.port();
@@ -38,7 +46,8 @@ pub fn start_auth_server(app: AppHandle) -> Result<AuthServer, String> {
 }
 
 fn handle_request(mut stream: TcpStream, app: AppHandle) {
-    let mut reader = BufReader::new(stream.try_clone().unwrap());
+    let Ok(cloned) = stream.try_clone() else { return };
+    let mut reader = BufReader::new(cloned);
     let mut request_line = String::new();
     if reader.read_line(&mut request_line).is_err() {
         return;
@@ -75,7 +84,7 @@ fn handle_request(mut stream: TcpStream, app: AppHandle) {
              <!DOCTYPE html><html><body style=\"text-align:center;padding-top:60px;font-family:sans-serif\">\
              <h2>✅ 登录成功</h2><p>{}，欢迎回来！</p><p style=\"color:#999\">可以关闭本页面了</p>\
              <script>setTimeout(()=>window.close(),2000)</script></body></html>",
-            nickname
+            html_escape(&nickname)
         );
         let _ = stream.write_all(response.as_bytes());
     } else {

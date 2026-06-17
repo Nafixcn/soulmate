@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useRef } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { WECHAT_APPID, WECHAT_WORKER } from '../config/wechat'
@@ -18,13 +18,15 @@ export const WeChatLogin: React.FC<Props> = ({ onLogin }) => {
   const [user, setUser] = React.useState<WeChatUser | null>(null)
   const [loggingIn, setLoggingIn] = React.useState(false)
   const [port, setPort] = React.useState(0)
+  const onLoginRef = useRef(onLogin)
+  onLoginRef.current = onLogin
 
   useEffect(() => {
     invoke<number>('get_auth_port').then(setPort).catch(() => {})
     const unlisten = listen<WeChatUser>('auth-success', (event) => {
       setUser(event.payload)
       setLoggingIn(false)
-      onLogin?.(event.payload)
+      onLoginRef.current?.(event.payload)
     })
     return () => { unlisten.then(fn => fn()) }
   }, [])

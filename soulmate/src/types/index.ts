@@ -36,16 +36,11 @@ export interface TTSSettings {
   voiceURI: string
 }
 
-export const LIVE2D_MODELS: { name: string; path: string; sdk: 'cubism2' | 'cubism4' }[] = [
-  { name: 'Shizuku', path: './models/shizuku/shizuku.model.json', sdk: 'cubism2' },
-  { name: 'Haru (Cubism4)', path: './models/haru/haru.model3.json', sdk: 'cubism4' },
-]
-
 export const API_PRESETS: { name: string; endpoint: string; models: string[] }[] = [
   {
     name: 'DeepSeek',
     endpoint: 'https://api.deepseek.com/v1/chat/completions',
-    models: ['deepseek-v4-pro', 'deepseek-v4-flash', 'deepseek-chat', 'deepseek-reasoner']
+    models: ['deepseek-chat', 'deepseek-reasoner', 'deepseek-v4-pro', 'deepseek-v4-flash']
   },
   { name: '自定义', endpoint: '', models: [] }
 ]

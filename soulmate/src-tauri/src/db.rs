@@ -55,6 +55,16 @@ pub fn get_messages(state: State<AppState>) -> Result<Vec<Message>, String> {
 }
 
 #[tauri::command]
+pub fn save_message(state: State<AppState>, message: Message) -> Result<(), String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    conn.execute(
+        "INSERT OR REPLACE INTO messages (id, role, content, thinking, timestamp) VALUES (?1, ?2, ?3, ?4, ?5)",
+        rusqlite::params![message.id, message.role, message.content, message.thinking, message.timestamp],
+    ).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
 pub fn clear_messages(state: State<AppState>) -> Result<(), String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
     conn.execute("DELETE FROM messages", []).map_err(|e| e.to_string())?;

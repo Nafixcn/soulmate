@@ -15,8 +15,6 @@
     "@tauri-apps/plugin-http": "^2",
     "@tauri-apps/plugin-shell": "^2",
     "lucide-react": "^1.18.0",
-    "pixi-live2d-display": "^0.5.0-beta",
-    "pixi.js": "^7",
     "react": "^19",
     "react-dom": "^19",
     "zustand": "^5"

@@ -1,23 +1,24 @@
 import React, { useEffect } from 'react'
 import { useSettingsStore } from '../store/settingsStore'
-import { API_PRESETS, LIVE2D_MODELS } from '../types'
+import { API_PRESETS } from '../types'
 import { getVoices } from '../services/ttsService'
 import { X, Bot, Volume2, Info } from 'lucide-react'
 
 interface Props { onClose: () => void }
 
 export const SettingsPanel: React.FC<Props> = ({ onClose }) => {
-  const { aiSettings, ttsSettings, live2dModelIndex, setAISettings, setTTSSettings, applyPreset, setLive2dModelIndex } = useSettingsStore()
+  const { aiSettings, ttsSettings, setAISettings, setTTSSettings, applyPreset } = useSettingsStore()
   const [tab, setTab] = React.useState<'ai' | 'tts' | 'about'>('ai')
   const [voices, setVoices] = React.useState<SpeechSynthesisVoice[]>([])
   const presetIndex = API_PRESETS.findIndex(p => p.endpoint === aiSettings.endpoint)
   const isCustom = presetIndex < 0 || presetIndex >= API_PRESETS.length - 1
+  const presetModels = isCustom ? [] : (API_PRESETS[presetIndex]?.models || [])
 
   useEffect(() => {
     const load = () => setVoices(getVoices())
     load()
-    window.speechSynthesis.onvoiceschanged = load
-    return () => { window.speechSynthesis.onvoiceschanged = null }
+    window.speechSynthesis.addEventListener('voiceschanged', load)
+    return () => { window.speechSynthesis.removeEventListener('voiceschanged', load) }
   }, [])
 
   return (
@@ -42,12 +43,6 @@ export const SettingsPanel: React.FC<Props> = ({ onClose }) => {
           {tab === 'ai' && (
             <div className="settings-section">
               <div className="form-group">
-                <label>Live2D 模型</label>
-                <select value={live2dModelIndex} onChange={e => setLive2dModelIndex(parseInt(e.target.value))}>
-                  {LIVE2D_MODELS.map((m, i) => <option key={i} value={i}>{m.name}</option>)}
-                </select>
-              </div>
-              <div className="form-group">
                 <label>API 服务商</label>
                 <select value={isCustom ? API_PRESETS.length - 1 : presetIndex}
                   onChange={e => { const i = parseInt(e.target.value); i < API_PRESETS.length - 1 ? applyPreset(i) : setAISettings({ endpoint: '' }) }}>
@@ -64,7 +59,23 @@ export const SettingsPanel: React.FC<Props> = ({ onClose }) => {
               </div>
               <div className="form-group">
                 <label>模型</label>
-                <input value={aiSettings.model} onChange={e => setAISettings({ model: e.target.value })} placeholder="deepseek-chat" />
+                {presetModels.length > 0 ? (
+                  <select value={aiSettings.model} onChange={e => setAISettings({ model: e.target.value })}>
+                    {presetModels.map(m => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                ) : (
+                  <input value={aiSettings.model} onChange={e => setAISettings({ model: e.target.value })} placeholder="deepseek-chat" />
+                )}
+              </div>
+              <div className="form-group">
+                <label>Temperature ({aiSettings.temperature})</label>
+                <input type="range" min={0} max={2} step={0.05} value={aiSettings.temperature}
+                  onChange={e => setAISettings({ temperature: parseFloat(e.target.value) })} />
+              </div>
+              <div className="form-group">
+                <label>Max Tokens ({aiSettings.maxTokens})</label>
+                <input type="range" min={64} max={4096} step={64} value={aiSettings.maxTokens}
+                  onChange={e => setAISettings({ maxTokens: parseInt(e.target.value) })} />
               </div>
             </div>
           )}
@@ -99,7 +110,7 @@ export const SettingsPanel: React.FC<Props> = ({ onClose }) => {
             <div className="settings-section" style={{ textAlign: 'center', padding: 24 }}>
               <h3>灵伴 SoulMate v2.0</h3>
               <p style={{ marginTop: 8, color: '#999' }}>Tauri 2 + React 19 + Rust</p>
-              <p style={{ marginTop: 4, color: '#999' }}>AI 女友陪伴 · Live2D 动态角色</p>
+              <p style={{ marginTop: 4, color: '#999' }}>AI 女友陪伴 · 桌面伴侣</p>
             </div>
           )}
         </div>

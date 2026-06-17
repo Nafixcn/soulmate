@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use serde::Serialize;
 use tauri::ipc::Channel;
 
@@ -14,16 +16,22 @@ pub async fn send_message(
     api_key: String,
     endpoint: String,
     model: String,
+    temperature: Option<f64>,
+    max_tokens: Option<u32>,
     on_chunk: Channel<AiChunk>,
 ) -> Result<(), String> {
     let messages: Vec<serde_json::Value> = serde_json::from_str(&messages_json).map_err(|e| e.to_string())?;
 
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(300))
+        .connect_timeout(Duration::from_secs(15))
+        .build()
+        .map_err(|e| e.to_string())?;
     let body = serde_json::json!({
         "model": model,
         "messages": messages,
-        "temperature": 0.85,
-        "max_tokens": 512,
+        "temperature": temperature.unwrap_or(0.85),
+        "max_tokens": max_tokens.unwrap_or(512),
         "stream": true,
     });
 

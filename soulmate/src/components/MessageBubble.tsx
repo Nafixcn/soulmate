@@ -1,10 +1,9 @@
 import React from 'react'
-import { Message, Persona, TTSSettings } from '../types'
+import { Message, Persona } from '../types'
 
 interface Props {
   message: Message
   persona: Persona
-  ttsSettings: TTSSettings
 }
 
 export const MessageBubble: React.FC<Props> = ({ message, persona }) => {
