@@ -1,13 +1,15 @@
 import { create } from 'zustand'
-import { AISettings, TTSSettings, API_PRESETS } from '../types'
+import { AISettings, TTSSettings, Persona, API_PRESETS } from '../types'
 
 interface SettingsStore {
   aiSettings: AISettings
   ttsSettings: TTSSettings
+  persona: Persona
   aiConfigured: boolean
 
   setAISettings: (s: Partial<AISettings>) => void
   setTTSSettings: (s: Partial<TTSSettings>) => void
+  setPersona: (p: Persona) => void
   applyPreset: (index: number) => void
   loadFromStorage: () => void
   saveToStorage: () => void
@@ -31,9 +33,22 @@ const defaultTTS: TTSSettings = {
   voiceURI: ''
 }
 
+const defaultPersona: Persona = {
+  name: '灵伴',
+  age: 20,
+  personality: '温柔体贴',
+  hobby: '看电影、听音乐',
+  speakingStyle: '可爱活泼，喜欢用语气词，会称呼你为"哥哥"',
+  relationshipStage: '刚认识',
+  emoji: '🌸',
+  hairColor: '#ff9fbf',
+  eyeColor: '#ff6b9d'
+}
+
 export const useSettingsStore = create<SettingsStore>((set, get) => ({
   aiSettings: defaultAI,
   ttsSettings: defaultTTS,
+  persona: defaultPersona,
   aiConfigured: false,
 
   setAISettings: (partial) => {
@@ -45,6 +60,10 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
   },
   setTTSSettings: (partial) => {
     set(s => ({ ttsSettings: { ...s.ttsSettings, ...partial } }))
+    get().saveToStorage()
+  },
+  setPersona: (persona) => {
+    set({ persona })
     get().saveToStorage()
   },
   applyPreset: (index) => {
@@ -63,13 +82,14 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
         set({
           aiSettings: { ...defaultAI, ...data.aiSettings },
           ttsSettings: { ...defaultTTS, ...data.ttsSettings },
+          persona: { ...defaultPersona, ...data.persona },
           aiConfigured: !!(data.aiSettings?.apiKey),
         })
       }
     } catch (e) { console.warn('load settings:', e) }
   },
   saveToStorage: () => {
-    const { aiSettings, ttsSettings } = get()
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ aiSettings, ttsSettings }))
+    const { aiSettings, ttsSettings, persona } = get()
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ aiSettings, ttsSettings, persona }))
   }
 }))

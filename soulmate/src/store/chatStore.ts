@@ -1,11 +1,10 @@
 import { create } from 'zustand'
-import { Message, Persona, Expression, AISettings, TTSSettings, AiChunk } from '../types'
+import { Message, Expression, AISettings, TTSSettings, AiChunk, Persona } from '../types'
 import { Channel, invoke } from '@tauri-apps/api/core'
 import { speak, stopSpeaking } from '../services/ttsService'
 
 interface ChatStore {
   messages: Message[]
-  persona: Persona
   isTyping: boolean
   expression: Expression
   isSpeaking: boolean
@@ -13,29 +12,15 @@ interface ChatStore {
   streamingContent: string
   streamingThinking: string
 
-  setPersona: (persona: Persona) => void
   setExpression: (expr: Expression) => void
-  sendMessage: (content: string, aiSettings: AISettings, ttsSettings: TTSSettings) => Promise<void>
+  sendMessage: (content: string, persona: Persona, aiSettings: AISettings, ttsSettings: TTSSettings) => Promise<void>
   loadMessages: () => Promise<void>
   clearChat: () => Promise<void>
   clearError: () => void
 }
 
-const defaultPersona: Persona = {
-  name: '灵伴',
-  age: 20,
-  personality: '温柔体贴',
-  hobby: '看电影、听音乐',
-  speakingStyle: '可爱活泼，喜欢用语气词，会称呼你为"哥哥"',
-  relationshipStage: '刚认识',
-  emoji: '🌸',
-  hairColor: '#ff9fbf',
-  eyeColor: '#ff6b9d'
-}
-
 export const useChatStore = create<ChatStore>((set, get) => ({
   messages: [],
-  persona: defaultPersona,
   isTyping: false,
   expression: 'neutral',
   isSpeaking: false,
@@ -43,7 +28,6 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   streamingContent: '',
   streamingThinking: '',
 
-  setPersona: (persona) => set({ persona }),
   setExpression: (expression) => set({ expression }),
   clearError: () => set({ error: null }),
 
@@ -56,7 +40,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     }
   },
 
-  sendMessage: async (content, aiSettings, ttsSettings) => {
+  sendMessage: async (content, persona, aiSettings, ttsSettings) => {
     const state = get()
     const userMsg: Message = {
       id: crypto.randomUUID(),
@@ -77,7 +61,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     invoke('save_message', { message: userMsg }).catch(() => {})
 
     try {
-      const systemPrompt = buildSystemPrompt(state.persona)
+      const systemPrompt = buildSystemPrompt(persona)
       const apiMessages = [
         { role: 'system', content: systemPrompt },
         ...state.messages.map(m => ({ role: m.role, content: m.content })),

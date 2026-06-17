@@ -1,6 +1,7 @@
 mod db;
 mod ai;
 mod auth;
+mod speech;
 
 use std::sync::Mutex;
 use tauri::Manager;
@@ -15,6 +16,11 @@ pub struct AppState {
 fn get_auth_port(state: tauri::State<AppState>) -> Result<u16, String> {
     let guard = state.auth_server.lock().map_err(|e| e.to_string())?;
     guard.as_ref().map(|s| s.port()).ok_or("auth not started".into())
+}
+
+#[tauri::command]
+fn speech_to_text(audio: Vec<u8>) -> Result<String, String> {
+    speech::recognize_speech(audio, "zh-CN")
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -47,6 +53,7 @@ pub fn run() {
             db::save_message,
             db::clear_messages,
             get_auth_port,
+            speech_to_text,
         ])
         .run(tauri::generate_context!())
         .expect("应用启动失败");

@@ -61,9 +61,9 @@ function scheduleDailyGreetings(addGreeting: (text: string) => void) {
 
 export const ChatWindow: React.FC = () => {
   const store = useChatStore()
-  const { messages, persona, isTyping, error, streamingContent, streamingThinking,
-    sendMessage, setPersona, clearChat, clearError, loadMessages } = store
-  const { aiSettings, ttsSettings } = useSettingsStore()
+  const { messages, isTyping, error, streamingContent, streamingThinking,
+    sendMessage, clearChat, clearError, loadMessages } = store
+  const { aiSettings, ttsSettings, persona, setPersona } = useSettingsStore()
 
   const [showEditor, setShowEditor] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
@@ -117,7 +117,7 @@ export const ChatWindow: React.FC = () => {
     scheduleDailyGreetings(addGreeting)
   }, [addGreeting])
 
-  const handleSend = useCallback((text: string) => sendMessage(text, aiSettings, ttsSettings), [aiSettings, ttsSettings, sendMessage])
+  const handleSend = useCallback((text: string) => sendMessage(text, persona, aiSettings, ttsSettings), [persona, aiSettings, ttsSettings, sendMessage])
 
   return (
       <div className="chat-window">
@@ -163,7 +163,7 @@ export const ChatWindow: React.FC = () => {
           </div>
         </div>
       </div>
-      <ChatInput onSend={handleSend} disabled={isTyping} onVoiceInput={handleSend} />
+      <ChatInput onSend={handleSend} disabled={isTyping} />
       {showEditor && <PersonaEditor persona={persona} onChange={setPersona} onClose={() => setShowEditor(false)} />}
       {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
     </div>
