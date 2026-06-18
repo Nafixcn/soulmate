@@ -24,7 +24,12 @@ export const ChatHeader: React.FC<Props> = ({ persona, onEditPersona, onSettings
 
   return (
     <div className="chat-header">
-      <div className="avatar"><span className="avatar-emoji">{persona.emoji}</span></div>
+      <div className="avatar">
+        {persona.avatar
+          ? <img src={persona.avatar} className="avatar-img-header" alt="" />
+          : <span className="avatar-emoji">{persona.emoji}</span>
+        }
+      </div>
       <div className="header-info">
         <div className="header-name">
           {persona.name}

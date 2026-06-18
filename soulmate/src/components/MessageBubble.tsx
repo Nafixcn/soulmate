@@ -19,7 +19,12 @@ export const MessageBubble: React.FC<Props> = ({ message, persona }) => {
 
   return (
     <div className="msg-row">
-      <div className="msg-avatar"><span>{persona.emoji}</span></div>
+      <div className="msg-avatar">
+        {persona.avatar
+          ? <img src={persona.avatar} className="avatar-img-msg" alt="" />
+          : <span>{persona.emoji}</span>
+        }
+      </div>
       <div className="msg-body">
         {message.thinking && (
           <div className="thinking-wrapper">

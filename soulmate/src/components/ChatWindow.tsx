@@ -138,13 +138,23 @@ export const ChatWindow: React.FC = () => {
             {messages.map((msg) => <MessageBubble key={msg.id} message={msg} persona={persona} />)}
             {isTyping && !streamingContent && (
               <div className="typing-indicator">
-                <div className="msg-avatar"><span>{persona.emoji}</span></div>
+                <div className="msg-avatar">
+                  {persona.avatar
+                    ? <img src={persona.avatar} className="avatar-img-msg" alt="" />
+                    : <span>{persona.emoji}</span>
+                  }
+                </div>
                 <div className="typing-dots"><span></span><span></span><span></span></div>
               </div>
             )}
             {isTyping && streamingContent && (
               <div className="msg-row">
-                <div className="msg-avatar"><span>{persona.emoji}</span></div>
+                <div className="msg-avatar">
+                  {persona.avatar
+                    ? <img src={persona.avatar} className="avatar-img-msg" alt="" />
+                    : <span>{persona.emoji}</span>
+                  }
+                </div>
                 <div className="msg-body">
                   {streamingThinking && (
                     <div className="thinking-wrapper">

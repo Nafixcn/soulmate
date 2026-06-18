@@ -1,6 +1,6 @@
-import React, { useState } from 'react'
+import React, { useState, useRef } from 'react'
 import { Persona } from '../types'
-import { X } from 'lucide-react'
+import { X, Camera } from 'lucide-react'
 
 interface Props {
   persona: Persona
@@ -16,10 +16,21 @@ const EYES = ['#ff6b9d', '#8B4513', '#9b59b6', '#4a90d9', '#5dae7e', '#e8b848', 
 
 export const PersonaEditor: React.FC<Props> = ({ persona, onChange, onClose }) => {
   const [draft, setDraft] = useState<Persona>({ ...persona })
+  const fileRef = useRef<HTMLInputElement>(null)
 
   const update = (key: keyof Persona, value: string | number) => {
     setDraft(prev => ({ ...prev, [key]: value } as Persona))
   }
+
+  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => update('avatar', reader.result as string)
+    reader.readAsDataURL(file)
+  }
+
+  const handleRemoveAvatar = () => update('avatar', '')
 
   const handleSave = () => {
     onChange(draft)
@@ -34,6 +45,26 @@ export const PersonaEditor: React.FC<Props> = ({ persona, onChange, onClose }) =
           <button className="close-btn" onClick={onClose}><X size={20} /></button>
         </div>
         <div className="persona-body">
+          <div className="form-group" style={{ alignItems: 'center' }}>
+            <label>头像</label>
+            <div className="avatar-upload">
+              {draft.avatar ? (
+                <div className="avatar-preview">
+                  <img src={draft.avatar} alt="" className="avatar-img" />
+                  <button className="avatar-remove" onClick={handleRemoveAvatar}>×</button>
+                </div>
+              ) : (
+                <button className="avatar-placeholder" onClick={() => fileRef.current?.click()}>
+                  <span className="avatar-emoji-lg">{draft.emoji}</span>
+                  <Camera size={14} className="avatar-camera" />
+                </button>
+              )}
+              <input ref={fileRef} type="file" accept="image/*" onChange={handleAvatarUpload} style={{ display: 'none' }} />
+              {draft.avatar && (
+                <button className="tag" onClick={() => fileRef.current?.click()} style={{ marginTop: 6 }}>更换图片</button>
+              )}
+            </div>
+          </div>
           <div className="form-group">
             <label>名字</label>
             <input value={draft.name} onChange={e => update('name', e.target.value)} maxLength={8} />

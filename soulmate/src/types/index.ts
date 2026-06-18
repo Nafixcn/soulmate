@@ -16,6 +16,7 @@ export interface Persona {
   emoji: string
   hairColor: string
   eyeColor: string
+  avatar: string
 }
 
 export type Expression = 'neutral' | 'happy' | 'shy' | 'loving' | 'surprised' | 'thinking'

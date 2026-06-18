@@ -42,7 +42,8 @@ const defaultPersona: Persona = {
   relationshipStage: '刚认识',
   emoji: '🌸',
   hairColor: '#ff9fbf',
-  eyeColor: '#ff6b9d'
+  eyeColor: '#ff6b9d',
+  avatar: ''
 }
 
 export const useSettingsStore = create<SettingsStore>((set, get) => ({
