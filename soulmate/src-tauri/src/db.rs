@@ -17,17 +17,16 @@ pub struct Message {
 pub fn init_db(path: &Path) -> Result<Connection, Box<dyn std::error::Error>> {
     let conn = Connection::open(path)?;
     conn.execute_batch(
-        "CREATE TABLE IF NOT EXISTS messages (
+        "PRAGMA journal_mode=WAL;
+         PRAGMA synchronous=NORMAL;
+         CREATE TABLE IF NOT EXISTS messages (
             id TEXT PRIMARY KEY,
             role TEXT NOT NULL,
             content TEXT NOT NULL,
             thinking TEXT,
             timestamp INTEGER NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS kv (
-            key TEXT PRIMARY KEY,
-            value TEXT NOT NULL
-        );"
+         );
+         CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp);"
     )?;
     Ok(conn)
 }

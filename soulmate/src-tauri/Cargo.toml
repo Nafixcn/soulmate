@@ -20,5 +20,7 @@ rusqlite = { version = "0.31", features = ["bundled"] }
 urlencoding = "2"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
 reqwest = { version = "0.12", features = ["json", "stream"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
 objc = "0.2"
 block = "0.1"

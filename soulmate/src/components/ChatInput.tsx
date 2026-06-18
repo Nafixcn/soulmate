@@ -12,6 +12,7 @@ export const ChatInput: React.FC<Props> = ({ onSend, disabled }) => {
   const [recording, setRecording] = useState(false)
   const [transcribing, setTranscribing] = useState(false)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const streamRef = useRef<MediaStream | null>(null)
   const chunksRef = useRef<Blob[]>([])
 
   const handleSend = () => {
@@ -26,6 +27,7 @@ export const ChatInput: React.FC<Props> = ({ onSend, disabled }) => {
   const startVoice = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      streamRef.current = stream
       chunksRef.current = []
       const mimeType = MediaRecorder.isTypeSupported('audio/mp4')
         ? 'audio/mp4'
@@ -35,8 +37,10 @@ export const ChatInput: React.FC<Props> = ({ onSend, disabled }) => {
       mr.start()
       mediaRecorderRef.current = mr
       setRecording(true)
-    } catch {
-      // microphone not available
+    } catch (e) {
+      console.error('Microphone access denied:', e)
+      streamRef.current?.getTracks().forEach(t => t.stop())
+      streamRef.current = null
     }
   }
 
@@ -49,6 +53,7 @@ export const ChatInput: React.FC<Props> = ({ onSend, disabled }) => {
     mr.onstop = async () => {
       mr.stream.getTracks().forEach(t => t.stop())
       mediaRecorderRef.current = null
+      streamRef.current = null
 
       const blob = new Blob(chunksRef.current, { type: mr.mimeType })
       chunksRef.current = []
@@ -58,8 +63,8 @@ export const ChatInput: React.FC<Props> = ({ onSend, disabled }) => {
       try {
         const result = await invoke<string>('speech_to_text', { audio: arr })
         if (result.trim()) onSend(result.trim())
-      } catch {
-        // silent fail
+      } catch (e) {
+        console.error('Speech recognition failed:', e)
       } finally {
         setTranscribing(false)
       }

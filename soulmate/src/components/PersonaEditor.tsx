@@ -18,8 +18,8 @@ export const PersonaEditor: React.FC<Props> = ({ persona, onChange, onClose }) =
   const [draft, setDraft] = useState<Persona>({ ...persona })
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const update = (key: keyof Persona, value: string | number) => {
-    setDraft(prev => ({ ...prev, [key]: value } as Persona))
+  const update = <K extends keyof Persona>(key: K, value: Persona[K]) => {
+    setDraft(prev => ({ ...prev, [key]: value }))
   }
 
   const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {

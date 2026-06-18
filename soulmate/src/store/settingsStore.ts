@@ -46,6 +46,17 @@ const defaultPersona: Persona = {
   avatar: ''
 }
 
+let saveTimer: ReturnType<typeof setTimeout> | null = null
+
+function debouncedSave() {
+  if (saveTimer) clearTimeout(saveTimer)
+  saveTimer = setTimeout(() => {
+    const { aiSettings, ttsSettings, persona } = useSettingsStore.getState()
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ aiSettings, ttsSettings, persona }))
+    saveTimer = null
+  }, 300)
+}
+
 export const useSettingsStore = create<SettingsStore>((set, get) => ({
   aiSettings: defaultAI,
   ttsSettings: defaultTTS,
@@ -57,15 +68,15 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
       aiSettings: { ...s.aiSettings, ...partial },
       aiConfigured: !!(partial.apiKey !== undefined ? partial.apiKey : s.aiSettings.apiKey)
     }))
-    get().saveToStorage()
+    debouncedSave()
   },
   setTTSSettings: (partial) => {
     set(s => ({ ttsSettings: { ...s.ttsSettings, ...partial } }))
-    get().saveToStorage()
+    debouncedSave()
   },
   setPersona: (persona) => {
     set({ persona })
-    get().saveToStorage()
+    debouncedSave()
   },
   applyPreset: (index) => {
     const preset = API_PRESETS[index]
@@ -73,7 +84,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     set(s => ({
       aiSettings: { ...s.aiSettings, endpoint: preset.endpoint || s.aiSettings.endpoint, model: preset.models[0] || s.aiSettings.model }
     }))
-    get().saveToStorage()
+    debouncedSave()
   },
   loadFromStorage: () => {
     try {

@@ -24,7 +24,7 @@ function findBestVoice(settings: TTSSettings): SpeechSynthesisVoice | null {
 }
 
 export function speak(text: string, settings: TTSSettings): Promise<void> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     if (!settings.enabled || !text.trim()) { resolve(); return }
     window.speechSynthesis.cancel()
     const clean = text.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{1F600}-\u{1F64F}\u{2000}-\u{200F}]/gu, '')
@@ -35,7 +35,7 @@ export function speak(text: string, settings: TTSSettings): Promise<void> {
     utterance.pitch = settings.pitch
     utterance.volume = 1
     utterance.onend = () => resolve()
-    utterance.onerror = (e) => { console.warn('TTS error:', e); resolve() }
+    utterance.onerror = (e) => { console.warn('TTS error:', e); reject(e) }
     window.speechSynthesis.speak(utterance)
   })
 }

@@ -1,3 +1,5 @@
+#![allow(unexpected_cfgs)]
+
 mod db;
 mod ai;
 mod auth;
@@ -10,6 +12,7 @@ use auth::AuthServer;
 pub struct AppState {
     pub db: Mutex<rusqlite::Connection>,
     pub auth_server: Mutex<Option<AuthServer>>,
+    pub http_client: Mutex<reqwest::Client>,
 }
 
 #[tauri::command]
@@ -31,12 +34,20 @@ pub fn run() {
         .setup(|app| {
             let app_dir = app.path().app_data_dir()
                 .expect("无法获取应用数据目录");
-            std::fs::create_dir_all(&app_dir).ok();
+            std::fs::create_dir_all(&app_dir).map_err(|e| format!("创建数据目录失败: {}", e))?;
             let conn = db::init_db(&app_dir.join("soulmate.db"))
                 .expect("数据库初始化失败");
+
+            let http_client = reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(300))
+                .connect_timeout(std::time::Duration::from_secs(15))
+                .build()
+                .expect("HTTP 客户端初始化失败");
+
             let state = AppState {
                 db: Mutex::new(conn),
                 auth_server: Mutex::new(None),
+                http_client: Mutex::new(http_client),
             };
             app.manage(state);
 

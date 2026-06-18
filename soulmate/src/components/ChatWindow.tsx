@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useCallback, useState } from 'react'
 import { useChatStore } from '../store/chatStore'
 import { useSettingsStore } from '../store/settingsStore'
+import { invoke } from '@tauri-apps/api/core'
 import { ChatHeader } from './ChatHeader'
 import { MessageBubble } from './MessageBubble'
 import { ChatInput } from './ChatInput'
@@ -34,17 +35,14 @@ const GREETINGS = [
 
 function scheduleDailyGreetings(addGreeting: (text: string) => void) {
   const now = new Date()
-  const dayStart = new Date(now)
-  dayStart.setHours(8, 0, 0, 0)
-  if (now > dayStart) dayStart.setDate(dayStart.getDate() + 1)
-
-  const count = 4 + Math.floor(Math.random() * 3) // 4-6
+  const count = 4 + Math.floor(Math.random() * 3)
   const usedHours = new Set<number>()
+  const timers: ReturnType<typeof setTimeout>[] = []
 
   for (let i = 0; i < count; i++) {
     let hour: number
     do {
-      hour = 9 + Math.floor(Math.random() * 13) // 9 AM - 9 PM
+      hour = 9 + Math.floor(Math.random() * 13)
     } while (usedHours.has(hour))
     usedHours.add(hour)
 
@@ -55,14 +53,22 @@ function scheduleDailyGreetings(addGreeting: (text: string) => void) {
 
     const delay = target.getTime() - now.getTime()
     const greeting = GREETINGS[Math.floor(Math.random() * GREETINGS.length)]
-    setTimeout(() => addGreeting(greeting), delay)
+    timers.push(setTimeout(() => addGreeting(greeting), delay))
   }
+
+  return timers
 }
 
 export const ChatWindow: React.FC = () => {
-  const store = useChatStore()
-  const { messages, isTyping, error, streamingContent, streamingThinking,
-    sendMessage, clearChat, clearError, loadMessages } = store
+  const messages = useChatStore(s => s.messages)
+  const isTyping = useChatStore(s => s.isTyping)
+  const error = useChatStore(s => s.error)
+  const streamingContent = useChatStore(s => s.streamingContent)
+  const streamingThinking = useChatStore(s => s.streamingThinking)
+  const sendMessage = useChatStore(s => s.sendMessage)
+  const clearChat = useChatStore(s => s.clearChat)
+  const clearError = useChatStore(s => s.clearError)
+  const loadMessages = useChatStore(s => s.loadMessages)
   const { aiSettings, ttsSettings, persona, setPersona } = useSettingsStore()
 
   const [showEditor, setShowEditor] = useState(false)
@@ -80,13 +86,21 @@ export const ChatWindow: React.FC = () => {
   )
   const bottomRef = useRef<HTMLDivElement>(null)
   const initialized = useRef(false)
-  const greetingTimer = useRef(false)
+  const greetingTimers = useRef<ReturnType<typeof setTimeout>[]>([])
 
   const addGreeting = useCallback((text: string) => {
-    const id = crypto.randomUUID()
+    const msg = {
+      id: crypto.randomUUID(),
+      role: 'assistant' as const,
+      content: text,
+      timestamp: Date.now()
+    }
     useChatStore.setState(s => ({
-      messages: [...s.messages, { id, role: 'assistant' as const, content: text, timestamp: Date.now() }]
+      messages: [...s.messages, msg]
     }))
+    invoke('save_message', { message: msg }).catch(e => {
+      console.error('Failed to save greeting:', e)
+    })
   }, [])
 
   useEffect(() => { loadMessages() }, [loadMessages])
@@ -94,27 +108,32 @@ export const ChatWindow: React.FC = () => {
 
   useEffect(() => {
     if (initialized.current) return
+    if (messages.length === 0 && !loadMessages) return
     initialized.current = true
     if (messages.length === 0) {
-      useChatStore.setState({
-        messages: [{
-          id: crypto.randomUUID(),
-          role: 'assistant' as const,
-          content: '你好呀~今天想聊点什么呢？',
-          timestamp: Date.now()
-        }]
+      const greeting = {
+        id: crypto.randomUUID(),
+        role: 'assistant' as const,
+        content: '你好呀~今天想聊点什么呢？',
+        timestamp: Date.now()
+      }
+      useChatStore.setState({ messages: [greeting] })
+      invoke('save_message', { message: greeting }).catch(e => {
+        console.error('Failed to save initial greeting:', e)
       })
     }
-  }, [messages.length])
+  }, [messages.length, loadMessages])
 
   useEffect(() => {
     if (error) { const t = setTimeout(clearError, 8000); return () => clearTimeout(t) }
   }, [error, clearError])
 
   useEffect(() => {
-    if (greetingTimer.current) return
-    greetingTimer.current = true
-    scheduleDailyGreetings(addGreeting)
+    greetingTimers.current = scheduleDailyGreetings(addGreeting)
+    return () => {
+      greetingTimers.current.forEach(clearTimeout)
+      greetingTimers.current = []
+    }
   }, [addGreeting])
 
   const handleSend = useCallback((text: string) => sendMessage(text, persona, aiSettings, ttsSettings), [persona, aiSettings, ttsSettings, sendMessage])

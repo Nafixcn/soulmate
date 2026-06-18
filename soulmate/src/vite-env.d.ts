@@ -1,7 +1,5 @@
 /// <reference types="vite/client" />
 
-declare const PIXI: any
-
 interface SpeechRecognitionEvent extends Event {
   readonly results: SpeechRecognitionResultList
   readonly resultIndex: number
