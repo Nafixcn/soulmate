@@ -1,4 +1,5 @@
 use serde::Serialize;
+use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpListener;
 use std::net::TcpStream;
@@ -59,6 +60,8 @@ pub fn start_auth_server(app: AppHandle) -> Result<AuthServer, String> {
     let port = listener.local_addr().map_err(|e| e.to_string())?.port();
     let shutdown = Arc::new(AtomicBool::new(false));
     let shutdown_clone = shutdown.clone();
+    let valid_states = Arc::new(std::sync::Mutex::new(HashMap::new()));
+    let valid_states_clone = valid_states.clone();
 
     std::thread::spawn(move || {
         for stream in listener.incoming() {
@@ -67,7 +70,8 @@ pub fn start_auth_server(app: AppHandle) -> Result<AuthServer, String> {
             }
             if let Ok(stream) = stream {
                 let app = app.clone();
-                std::thread::spawn(move || handle_request(stream, app));
+                let states = valid_states_clone.clone();
+                std::thread::spawn(move || handle_request(stream, app, states));
             }
         }
     });
@@ -75,7 +79,7 @@ pub fn start_auth_server(app: AppHandle) -> Result<AuthServer, String> {
     Ok(AuthServer { port, shutdown: shutdown_clone })
 }
 
-fn handle_request(mut stream: TcpStream, app: AppHandle) {
+fn handle_request(mut stream: TcpStream, app: AppHandle, valid_states: Arc<std::sync::Mutex<HashMap<String, i64>>>) {
     stream.set_read_timeout(Some(std::time::Duration::from_secs(5))).ok();
 
     let Ok(cloned) = stream.try_clone() else { return };
@@ -98,13 +102,30 @@ fn handle_request(mut stream: TcpStream, app: AppHandle) {
         let params = if let Some(query) = path.split('?').nth(1) {
             parse_query(query)
         } else {
-            std::collections::HashMap::new()
+            HashMap::new()
         };
 
         let state = params.get("state").cloned().unwrap_or_default();
         if state.is_empty() {
             let _ = stream.write_all(b"HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nMissing state parameter");
             return;
+        }
+
+        {
+            let mut states = valid_states.lock().unwrap();
+            if let Some(created_at) = states.remove(&state) {
+                let now = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs() as i64;
+                if now - created_at > 300 {
+                    let _ = stream.write_all(b"HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nState expired");
+                    return;
+                }
+            } else {
+                let _ = stream.write_all(b"HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nInvalid state parameter");
+                return;
+            }
         }
 
         let code = params.get("code").cloned().unwrap_or_default();
@@ -136,6 +157,15 @@ fn handle_request(mut stream: TcpStream, app: AppHandle) {
     } else if path.starts_with("/auth-url") {
         drain_headers(&mut reader);
         let state = generate_state();
+        {
+            let mut states = valid_states.lock().unwrap();
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs() as i64;
+            states.insert(state.clone(), now);
+            states.retain(|_, v| now - *v < 600);
+        }
         let response = format!(
             "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\n{}",
             state
@@ -147,8 +177,8 @@ fn handle_request(mut stream: TcpStream, app: AppHandle) {
     }
 }
 
-fn parse_query(query: &str) -> std::collections::HashMap<String, String> {
-    let mut map = std::collections::HashMap::new();
+fn parse_query(query: &str) -> HashMap<String, String> {
+    let mut map = HashMap::new();
     for pair in query.split('&') {
         if let Some((k, v)) = pair.split_once('=') {
             let key = urlencoding::decode(k).unwrap_or_else(|_| k.into()).into_owned();

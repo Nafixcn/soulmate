@@ -6,6 +6,7 @@ mod auth;
 mod speech;
 
 use std::sync::Mutex;
+use dashmap::DashMap;
 use tauri::Manager;
 use auth::AuthServer;
 
@@ -13,6 +14,7 @@ pub struct AppState {
     pub db: Mutex<rusqlite::Connection>,
     pub auth_server: Mutex<Option<AuthServer>>,
     pub http_client: Mutex<reqwest::Client>,
+    pub cancelled_requests: std::sync::Arc<DashMap<String, bool>>,
 }
 
 #[tauri::command]
@@ -48,6 +50,7 @@ pub fn run() {
                 db: Mutex::new(conn),
                 auth_server: Mutex::new(None),
                 http_client: Mutex::new(http_client),
+                cancelled_requests: std::sync::Arc::new(DashMap::new()),
             };
             app.manage(state);
 
@@ -60,9 +63,12 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             ai::send_message,
+            ai::cancel_request,
             db::get_messages,
             db::save_message,
             db::clear_messages,
+            db::delete_messages_from,
+            db::search_messages,
             get_auth_port,
             speech_to_text,
         ])

@@ -6,8 +6,6 @@ use objc::{class, msg_send, sel, sel_impl};
 use objc::runtime::Object;
 #[cfg(target_os = "macos")]
 use std::io::Write;
-#[cfg(target_os = "macos")]
-use std::sync::mpsc;
 
 #[cfg(target_os = "macos")]
 pub fn recognize_speech(audio_data: Vec<u8>, locale: &str) -> Result<String, String> {
@@ -61,7 +59,7 @@ fn transcribe_file(path: &std::path::Path, locale: &str) -> Result<String, Strin
         let _: () = msg_send![request, setRequiresOnDeviceRecognition: false];
         let _: () = msg_send![request, setShouldReportPartialResults: false];
 
-        let (tx, rx) = mpsc::channel();
+        let (tx, rx) = std::sync::mpsc::channel();
 
         let block = block::ConcreteBlock::new(move |result: *mut Object, _error: *mut Object| {
             let text = if result.is_null() {

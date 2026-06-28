@@ -6,8 +6,10 @@ import { ChatHeader } from './ChatHeader'
 import { MessageBubble } from './MessageBubble'
 import { ChatInput } from './ChatInput'
 import { PersonaEditor } from './PersonaEditor'
+import { PersonaManager } from './PersonaManager'
 import { SettingsPanel } from './SettingsPanel'
-import { AlertTriangle } from 'lucide-react'
+import { SearchPanel } from './SearchPanel'
+import { AlertTriangle, Search, Download } from 'lucide-react'
 
 const PETALS = ['🌸', '💮', '🏵️', '🌺', '✿', '❀', '🌸', '💮']
 const petalCount = 12
@@ -53,10 +55,40 @@ function scheduleDailyGreetings(addGreeting: (text: string) => void) {
 
     const delay = target.getTime() - now.getTime()
     const greeting = GREETINGS[Math.floor(Math.random() * GREETINGS.length)]
-    timers.push(setTimeout(() => addGreeting(greeting), delay))
+    timers.push(setTimeout(() => {
+      addGreeting(greeting)
+      showNotification(greeting)
+    }, delay))
   }
 
   return timers
+}
+
+function showNotification(body: string) {
+  if (typeof Notification === 'undefined') return
+  if (Notification.permission === 'granted') {
+    new Notification('灵伴', { body, silent: false })
+  } else if (Notification.permission !== 'denied') {
+    Notification.requestPermission().then(p => {
+      if (p === 'granted') new Notification('灵伴', { body, silent: false })
+    })
+  }
+}
+
+function exportChat(messages: { role: string; content: string; timestamp: number }[], personaName: string): void {
+  const lines = messages.map(m => {
+    const time = new Date(m.timestamp).toLocaleString('zh-CN')
+    const sender = m.role === 'user' ? '我' : personaName
+    return `[${time}] ${sender}：${m.content}`
+  })
+  const md = `# 与${personaName}的聊天记录\n\n导出时间：${new Date().toLocaleString('zh-CN')}\n\n---\n\n${lines.join('\n\n')}`
+  const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `soulmate-chat-${Date.now()}.md`
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 export const ChatWindow: React.FC = () => {
@@ -69,10 +101,14 @@ export const ChatWindow: React.FC = () => {
   const clearChat = useChatStore(s => s.clearChat)
   const clearError = useChatStore(s => s.clearError)
   const loadMessages = useChatStore(s => s.loadMessages)
-  const { aiSettings, ttsSettings, persona, setPersona } = useSettingsStore()
+  const deleteFrom = useChatStore(s => s.deleteFrom)
+  const regenerate = useChatStore(s => s.regenerate)
+  const { aiSettings, ttsSettings, persona, personas, activePersonaIndex, setPersona, switchPersona } = useSettingsStore()
 
   const [showEditor, setShowEditor] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [showManagePersonas, setShowManagePersonas] = useState(false)
+  const [showSearch, setShowSearch] = useState(false)
   const [streamingThinkOpen, setStreamingThinkOpen] = useState(true)
   const [petals] = useState(() =>
     Array.from({ length: petalCount }, (_, i) => ({
@@ -87,6 +123,7 @@ export const ChatWindow: React.FC = () => {
   const bottomRef = useRef<HTMLDivElement>(null)
   const initialized = useRef(false)
   const greetingTimers = useRef<ReturnType<typeof setTimeout>[]>([])
+  const messagesRef = useRef<HTMLDivElement>(null)
 
   const addGreeting = useCallback((text: string) => {
     const msg = {
@@ -108,7 +145,6 @@ export const ChatWindow: React.FC = () => {
 
   useEffect(() => {
     if (initialized.current) return
-    if (messages.length === 0 && !loadMessages) return
     initialized.current = true
     if (messages.length === 0) {
       const greeting = {
@@ -122,7 +158,7 @@ export const ChatWindow: React.FC = () => {
         console.error('Failed to save initial greeting:', e)
       })
     }
-  }, [messages.length, loadMessages])
+  }, [messages.length])
 
   useEffect(() => {
     if (error) { const t = setTimeout(clearError, 8000); return () => clearTimeout(t) }
@@ -136,25 +172,90 @@ export const ChatWindow: React.FC = () => {
     }
   }, [addGreeting])
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowEditor(false)
+        setShowSettings(false)
+        setShowManagePersonas(false)
+        setShowSearch(false)
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        e.preventDefault()
+        setShowSearch(prev => !prev)
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'e') {
+        e.preventDefault()
+        exportChat(messages, persona.name)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [messages, persona.name])
+
   const handleSend = useCallback((text: string) => sendMessage(text, persona, aiSettings, ttsSettings), [persona, aiSettings, ttsSettings, sendMessage])
 
+  const handleDeleteFrom = useCallback((ts: number) => {
+    deleteFrom(ts)
+  }, [deleteFrom])
+
+  const handleRegenerate = useCallback(() => {
+    regenerate(persona, aiSettings, ttsSettings)
+  }, [persona, aiSettings, ttsSettings, regenerate])
+
+  const scrollToMessage = useCallback((timestamp: number) => {
+    const el = messagesRef.current?.querySelector(`[data-ts="${timestamp}"]`)
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      el.classList.add('msg-highlight')
+      setTimeout(() => el.classList.remove('msg-highlight'), 2000)
+    }
+  }, [])
+
+  const lastAssistantIdx = messages.reduce((acc, m, i) => m.role === 'assistant' ? i : acc, -1)
+
   return (
-      <div className="chat-window">
-        <div className="sakura-petals">
-          {petals.map(p => (
-            <div key={p.id} className="sakura-petal" style={{
-              left: `${p.left}%`, animationDelay: `${p.delay}s`,
-              animationDuration: `${p.duration}s`, fontSize: p.size,
-            }}>{p.emoji}</div>
-          ))}
-        </div>
-        <ChatHeader persona={persona} onEditPersona={() => setShowEditor(true)}
-        onSettings={() => setShowSettings(true)} onClearChat={clearChat} />
+    <div className="chat-window">
+      <div className="sakura-petals">
+        {petals.map(p => (
+          <div key={p.id} className="sakura-petal" style={{
+            left: `${p.left}%`, animationDelay: `${p.delay}s`,
+            animationDuration: `${p.duration}s`, fontSize: p.size,
+          }}>{p.emoji}</div>
+        ))}
+      </div>
+      <ChatHeader
+        persona={persona} personas={personas} activePersonaIndex={activePersonaIndex}
+        onEditPersona={() => setShowEditor(true)}
+        onManagePersonas={() => setShowManagePersonas(true)}
+        onSettings={() => setShowSettings(true)}
+        onClearChat={clearChat}
+        onSwitchPersona={switchPersona}
+      />
       <div className="chat-body">
         {error && <div className="error-banner" onClick={clearError}><AlertTriangle size={14} /> {error}</div>}
-        <div className="chat-messages">
+        {showSearch && <SearchPanel messages={messages} onClose={() => setShowSearch(false)} onScrollTo={scrollToMessage} />}
+        <div className="chat-toolbar">
+          <button className="toolbar-btn" onClick={() => setShowSearch(!showSearch)} title="搜索 (Ctrl+F)">
+            <Search size={14} />
+          </button>
+          <button className="toolbar-btn" onClick={() => exportChat(messages, persona.name)} title="导出 (Ctrl+E)">
+            <Download size={14} />
+          </button>
+        </div>
+        <div className="chat-messages" ref={messagesRef}>
           <div className="messages-container">
-            {messages.map((msg) => <MessageBubble key={msg.id} message={msg} persona={persona} />)}
+            {messages.map((msg, idx) => (
+              <div key={msg.id} data-ts={msg.timestamp}>
+                <MessageBubble
+                  message={msg}
+                  persona={persona}
+                  onDelete={handleDeleteFrom}
+                  onRegenerate={idx === lastAssistantIdx ? handleRegenerate : undefined}
+                  isLast={idx === lastAssistantIdx}
+                />
+              </div>
+            ))}
             {isTyping && !streamingContent && (
               <div className="typing-indicator">
                 <div className="msg-avatar">
@@ -184,7 +285,9 @@ export const ChatWindow: React.FC = () => {
                       {streamingThinkOpen && <div className="thinking-block">{streamingThinking}</div>}
                     </div>
                   )}
-                  <div className="msg-bubble ai-bubble">{streamingContent}<span className="cursor-blink">|</span></div>
+                  <div className="msg-bubble ai-bubble streaming-markdown">
+                    {streamingContent}<span className="cursor-blink">|</span>
+                  </div>
                 </div>
               </div>
             )}
@@ -195,6 +298,17 @@ export const ChatWindow: React.FC = () => {
       <ChatInput onSend={handleSend} disabled={isTyping} />
       {showEditor && <PersonaEditor persona={persona} onChange={setPersona} onClose={() => setShowEditor(false)} />}
       {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
+      {showManagePersonas && (
+        <PersonaManager
+          personas={personas}
+          activeIndex={activePersonaIndex}
+          onAdd={(p) => useSettingsStore.getState().addPersona(p)}
+          onUpdate={(i, p) => useSettingsStore.getState().updatePersona(i, p)}
+          onRemove={(i) => useSettingsStore.getState().removePersona(i)}
+          onSwitch={switchPersona}
+          onClose={() => setShowManagePersonas(false)}
+        />
+      )}
     </div>
   )
 }

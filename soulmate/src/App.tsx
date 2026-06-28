@@ -8,6 +8,7 @@ const App: React.FC = () => {
   const [ready, setReady] = useState(false)
 
   useEffect(() => { loadFromStorage(); setReady(true) }, [loadFromStorage])
+  useEffect(() => { useSettingsStore.getState().saveToStorage() }, [ready])
 
   if (!ready) return null
   return <ErrorBoundary><ChatWindow /></ErrorBoundary>
