@@ -64,6 +64,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             ai::send_message,
             ai::cancel_request,
+            ai::evaluate_relationship,
             db::get_messages,
             db::save_message,
             db::clear_messages,

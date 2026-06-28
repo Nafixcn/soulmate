@@ -77,6 +77,13 @@ export const SettingsPanel: React.FC<Props> = ({ onClose }) => {
                 <input type="range" min={64} max={4096} step={64} value={aiSettings.maxTokens}
                   onChange={e => setAISettings({ maxTokens: parseInt(e.target.value) })} />
               </div>
+              <div className="form-group">
+                <label>
+                  <input type="checkbox" checked={aiSettings.autoProgress} onChange={e => setAISettings({ autoProgress: e.target.checked })} />
+                  {' '}自动推进关系阶段
+                </label>
+                <span style={{ fontSize: 11, color: '#998', marginTop: 2 }}>每 20 条消息评估一次，由 AI 判断关系阶段</span>
+              </div>
             </div>
           )}
           {tab === 'tts' && (

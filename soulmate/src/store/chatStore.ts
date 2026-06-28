@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { Message, Expression, AISettings, TTSSettings, AiChunk, Persona } from '../types'
 import { Channel, invoke } from '@tauri-apps/api/core'
 import { speak, stopSpeaking } from '../services/ttsService'
+import { useSettingsStore } from './settingsStore'
 
 const CONTEXT_WINDOW = 30
 const MAX_RETRIES = 2
@@ -17,6 +18,7 @@ interface ChatStore {
   streamingThinking: string
   abortController: AbortController | null
   requestId: string | null
+  userMsgCount: number
 
   setExpression: (expr: Expression) => void
   sendMessage: (content: string, persona: Persona, aiSettings: AISettings, ttsSettings: TTSSettings) => Promise<void>
@@ -38,6 +40,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   streamingThinking: '',
   abortController: null,
   requestId: null,
+  userMsgCount: 0,
 
   setExpression: (expression) => set({ expression }),
   clearError: () => set({ error: null }),
@@ -93,6 +96,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       error: null,
       streamingContent: '',
       streamingThinking: '',
+      userMsgCount: state.userMsgCount + 1,
     })
 
     try {
@@ -117,6 +121,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       }
       try {
         await doStream(apiMessages, aiSettings, reqId, controller, ttsSettings)
+        maybeEvaluateRelation(persona, aiSettings)
         return
       } catch (error: unknown) {
         if (controller.signal.aborted) return
@@ -195,6 +200,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
     try {
       await doStream(apiMessages, aiSettings, reqId, controller, ttsSettings)
+      maybeEvaluateRelation(persona, aiSettings)
     } catch (error: unknown) {
       if (controller.signal.aborted) return
       set({
@@ -318,4 +324,66 @@ function detectExpression(text: string): Expression {
   if (/真的吗|不会吧|天哪|居然|哇|什么！/.test(text)) return 'surprised'
   if (/嗯|我想想|这个|好像|可能/.test(text)) return 'thinking'
   return 'neutral'
+}
+
+const EVAL_INTERVAL = 20
+const STAGE_ORDER = ['刚认识', '朋友', '暧昧', '热恋', '老夫老妻']
+
+async function maybeEvaluateRelation(persona: Persona, aiSettings: AISettings) {
+  if (!aiSettings.autoProgress || !aiSettings.apiKey) return
+
+  const state = useChatStore.getState()
+  if (state.userMsgCount % EVAL_INTERVAL !== 0) return
+
+  const msgs = state.messages.slice(-60)
+  const evalMsgs: { role: string; content: string }[] = []
+  for (let i = 0; i < msgs.length; i++) {
+    const m = msgs[i]
+    if (i < msgs.length - 1) {
+      evalMsgs.push({ role: m.role, content: m.content.slice(0, 120) })
+    }
+  }
+
+  try {
+    const result: string = await invoke('evaluate_relationship', {
+      apiKey: aiSettings.apiKey,
+      endpoint: aiSettings.endpoint,
+      model: aiSettings.model,
+      messagesJson: JSON.stringify(evalMsgs),
+    })
+
+    const detected = result.trim()
+    const currentIdx = STAGE_ORDER.indexOf(persona.relationshipStage)
+    const detectedIdx = STAGE_ORDER.indexOf(detected)
+    if (detectedIdx < 0) return
+
+    if (detectedIdx > currentIdx) {
+      const newStage = STAGE_ORDER[detectedIdx] as Persona['relationshipStage']
+      const updatedPersona = { ...persona, relationshipStage: newStage }
+      useSettingsStore.getState().setPersona(updatedPersona)
+
+      const levelNames: Record<string, string> = {
+        '朋友': '💛 你们成为朋友了',
+        '暧昧': '💗 关系升温，开始暧昧了',
+        '热恋': '❤️ 热恋中！',
+        '老夫老妻': '🏡 老夫老妻般的默契',
+      }
+
+      const greeting = levelNames[newStage] || `💕 关系升级：${newStage}`
+      const notifyMsg = {
+        id: crypto.randomUUID(),
+        role: 'assistant' as const,
+        content: greeting,
+        timestamp: Date.now()
+      }
+      useChatStore.setState(s => ({ messages: [...s.messages, notifyMsg] }))
+      invoke('save_message', { message: notifyMsg }).catch(() => {})
+
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        new Notification('灵伴', { body: greeting, silent: false })
+      }
+    }
+  } catch {
+    // evaluation failed silently
+  }
 }

@@ -181,7 +181,8 @@ html, body, #root { height: 100%; width: 100%; overflow: hidden; font-family: -a
   color: var(--sub); margin: 6px 0;
 }
 .ai-bubble strong { color: #d06080; }
-.ai-bubble a { color: #e896b0; text-decoration: underline; }
+.ai-bubble a { color: #e896b0; text-decoration: none; }
+.ai-bubble del, .ai-bubble s { text-decoration: none; }
 .ai-bubble table { border-collapse: collapse; margin: 6px 0; font-size: 12px; width: 100%; }
 .ai-bubble th, .ai-bubble td { border: 1px solid rgba(240,168,192,0.2); padding: 4px 8px; }
 .ai-bubble th { background: rgba(240,168,192,0.1); }
