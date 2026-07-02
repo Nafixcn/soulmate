@@ -40,9 +40,9 @@ fn html_escape(s: &str) -> String {
 }
 
 fn generate_state() -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let t = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos();
-    format!("{:x}", t)
+    use rand::Rng;
+    let bytes: [u8; 16] = rand::thread_rng().gen();
+    bytes.iter().map(|b| format!("{:02x}", b)).collect()
 }
 
 fn drain_headers(reader: &mut impl BufRead) {

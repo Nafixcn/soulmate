@@ -122,6 +122,7 @@ export const ChatWindow: React.FC = () => {
   )
   const bottomRef = useRef<HTMLDivElement>(null)
   const initialized = useRef(false)
+  const loaded = useRef(false)
   const greetingTimers = useRef<ReturnType<typeof setTimeout>[]>([])
   const messagesRef = useRef<HTMLDivElement>(null)
 
@@ -140,25 +141,42 @@ export const ChatWindow: React.FC = () => {
     })
   }, [])
 
-  useEffect(() => { loadMessages() }, [loadMessages])
+  useEffect(() => {
+    loadMessages().finally(() => { loaded.current = true })
+  }, [loadMessages])
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages, isTyping, streamingContent])
 
   useEffect(() => {
     if (initialized.current) return
     initialized.current = true
-    if (messages.length === 0) {
-      const greeting = {
-        id: crypto.randomUUID(),
-        role: 'assistant' as const,
-        content: '你好呀~今天想聊点什么呢？',
-        timestamp: Date.now()
-      }
+
+    const showInitialGreeting = () => {
       useChatStore.setState({ messages: [greeting] })
       invoke('save_message', { message: greeting }).catch(e => {
         console.error('Failed to save initial greeting:', e)
       })
     }
-  }, [messages.length])
+
+    const greeting = {
+      id: crypto.randomUUID(),
+      role: 'assistant' as const,
+      content: '你好呀~今天想聊点什么呢？',
+      timestamp: Date.now()
+    }
+
+    const interval = setInterval(() => {
+      const msgs = useChatStore.getState().messages
+      if (loaded.current && msgs.length === 0) {
+        showInitialGreeting()
+        clearInterval(interval)
+      }
+      if (msgs.length > 0) {
+        clearInterval(interval)
+      }
+    }, 50)
+
+    return () => clearInterval(interval)
+  }, [])
 
   useEffect(() => {
     if (error) { const t = setTimeout(clearError, 8000); return () => clearTimeout(t) }

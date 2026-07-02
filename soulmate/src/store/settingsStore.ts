@@ -1,5 +1,41 @@
 import { create } from 'zustand'
 import { AISettings, TTSSettings, Persona, API_PRESETS, DEFAULT_PERSONA } from '../types'
+import { load } from '@tauri-apps/plugin-store'
+
+const STORE_PATH = 'soulmate-settings.json'
+let tauriStore: Awaited<ReturnType<typeof load>> | null = null
+let storeLoading: Promise<void> | null = null
+
+async function getStore() {
+  if (tauriStore) return tauriStore
+  if (!storeLoading) {
+    storeLoading = (async () => {
+      tauriStore = await load(STORE_PATH, { autoSave: false, defaults: {} })
+    })()
+  }
+  await storeLoading
+  return tauriStore!
+}
+
+async function loadApiKeyFromStore(): Promise<string> {
+  try {
+    const s = await getStore()
+    const key = await s.get<string>('apiKey')
+    return key || ''
+  } catch {
+    return ''
+  }
+}
+
+async function saveApiKeyToStore(apiKey: string) {
+  try {
+    const s = await getStore()
+    await s.set('apiKey', apiKey || '')
+    await s.save()
+  } catch (e) {
+    console.warn('Failed to save API key to store:', e)
+  }
+}
 
 interface SettingsStore {
   aiSettings: AISettings
@@ -64,6 +100,9 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     const merged = { ...current, ...partial }
     const hasKey = !!merged.apiKey
     set({ aiSettings: merged, aiConfigured: hasKey })
+    if (partial.apiKey !== undefined) {
+      saveApiKeyToStore(merged.apiKey)
+    }
     debouncedSave()
   },
   setTTSSettings: (partial) => {
@@ -147,6 +186,16 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
         })
       }
     } catch (e) { console.warn('load settings:', e) }
+
+    loadApiKeyFromStore().then(apiKey => {
+      if (apiKey) {
+        const current = get()
+        set({
+          aiSettings: { ...current.aiSettings, apiKey },
+          aiConfigured: true,
+        })
+      }
+    })
   },
   saveToStorage: () => {
     const { aiSettings, ttsSettings, persona, personas, activePersonaIndex } = get()

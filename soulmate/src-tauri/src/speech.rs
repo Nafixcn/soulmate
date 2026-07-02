@@ -1,5 +1,3 @@
-// TODO: 大版本更新时迁移 objc 0.2 + block 0.1 → objc2 + block2
-// 当前 block v0.1.6 有 future-incompat 警告，未来 Rust 版本可能拒绝编译
 #[cfg(target_os = "macos")]
 use objc::{class, msg_send, sel, sel_impl};
 #[cfg(target_os = "macos")]

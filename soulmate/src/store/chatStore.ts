@@ -30,6 +30,19 @@ interface ChatStore {
   cancelRequest: () => Promise<void>
 }
 
+async function cancelCurrent(state: ChatStore) {
+  if (state.abortController) {
+    state.abortController.abort()
+  }
+  if (state.requestId) {
+    try { await invoke('cancel_request', { requestId: state.requestId }) } catch {}
+  }
+}
+
+function resetCancelState() {
+  return { isTyping: false, streamingContent: '', streamingThinking: '', abortController: null, requestId: null }
+}
+
 export const useChatStore = create<ChatStore>((set, get) => ({
   messages: [],
   isTyping: false,
@@ -59,24 +72,14 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
   cancelRequest: async () => {
     const state = get()
-    if (state.abortController) {
-      state.abortController.abort()
-    }
-    if (state.requestId) {
-      try { await invoke('cancel_request', { requestId: state.requestId }) } catch {}
-    }
-    set({ isTyping: false, streamingContent: '', streamingThinking: '', abortController: null, requestId: null })
+    await cancelCurrent(state)
+    set(resetCancelState())
   },
 
   sendMessage: async (content, persona, aiSettings, ttsSettings) => {
     const state = get()
 
-    if (state.abortController) {
-      state.abortController.abort()
-    }
-    if (state.requestId) {
-      try { await invoke('cancel_request', { requestId: state.requestId }) } catch {}
-    }
+    await cancelCurrent(state)
 
     const controller = new AbortController()
     const reqId = crypto.randomUUID()
@@ -103,6 +106,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       await invoke('save_message', { message: userMsg })
     } catch (e) {
       console.error('Failed to save user message:', e)
+      set({ error: '消息保存失败，重启后可能丢失' })
     }
 
     const allMessages = [...state.messages, userMsg]
@@ -131,11 +135,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     }
 
     set({
-      isTyping: false,
-      streamingContent: '',
-      streamingThinking: '',
-      abortController: null,
-      requestId: null,
+      ...resetCancelState(),
       error: lastError || '发送失败，请检查网络和API设置',
     })
   },
@@ -143,12 +143,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   deleteFrom: async (fromTimestamp: number) => {
     stopSpeaking()
     const state = get()
-    if (state.abortController) {
-      state.abortController.abort()
-    }
-    if (state.requestId) {
-      try { await invoke('cancel_request', { requestId: state.requestId }) } catch {}
-    }
+    await cancelCurrent(state)
     try {
       await invoke('delete_messages_from', { fromTimestamp })
     } catch (e) {
@@ -156,11 +151,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     }
     set(s => ({
       messages: s.messages.filter(m => m.timestamp < fromTimestamp),
-      isTyping: false,
-      streamingContent: '',
-      streamingThinking: '',
-      abortController: null,
-      requestId: null,
+      ...resetCancelState(),
       expression: 'neutral',
       error: null,
     }))
@@ -204,11 +195,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     } catch (error: unknown) {
       if (controller.signal.aborted) return
       set({
-        isTyping: false,
-        streamingContent: '',
-        streamingThinking: '',
-        abortController: null,
-        requestId: null,
+        ...resetCancelState(),
         error: error instanceof Error ? error.message : '重新生成失败',
       })
     }
@@ -217,18 +204,13 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   clearChat: async () => {
     stopSpeaking()
     const state = get()
-    if (state.abortController) {
-      state.abortController.abort()
-    }
-    if (state.requestId) {
-      try { await invoke('cancel_request', { requestId: state.requestId }) } catch {}
-    }
+    await cancelCurrent(state)
     try {
       await invoke('clear_messages')
     } catch (e) {
       console.error('Failed to clear messages:', e)
     }
-    set({ messages: [], expression: 'neutral', error: null, abortController: null, requestId: null })
+    set({ messages: [], expression: 'neutral', error: null, ...resetCancelState() })
   },
 }))
 

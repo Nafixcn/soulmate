@@ -5,6 +5,7 @@
   "permissions": [
     "core:default",
     "http:default",
-    "shell:default"
+    "shell:default",
+    "store:default"
   ]
 }

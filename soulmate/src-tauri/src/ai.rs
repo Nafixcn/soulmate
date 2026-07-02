@@ -24,8 +24,11 @@ pub async fn send_message(
     request_id: String,
     on_chunk: Channel<AiChunk>,
 ) -> Result<(), String> {
-    if !endpoint.starts_with("https://") {
-        return Err("API 端点必须使用 HTTPS 协议以确保安全".into());
+    if !endpoint.starts_with("https://")
+        && !endpoint.starts_with("http://localhost")
+        && !endpoint.starts_with("http://127.0.0.1")
+    {
+        return Err("API 端点必须使用 HTTPS 协议（本地开发地址除外）以确保安全".into());
     }
 
     let messages: Vec<serde_json::Value> = serde_json::from_str(&messages_json).map_err(|e| e.to_string())?;
@@ -126,8 +129,11 @@ pub async fn evaluate_relationship(
     model: String,
     messages_json: String,
 ) -> Result<String, String> {
-    if !endpoint.starts_with("https://") {
-        return Err("API 端点必须使用 HTTPS 协议以确保安全".into());
+    if !endpoint.starts_with("https://")
+        && !endpoint.starts_with("http://localhost")
+        && !endpoint.starts_with("http://127.0.0.1")
+    {
+        return Err("API 端点必须使用 HTTPS 协议（本地开发地址除外）以确保安全".into());
     }
 
     let client = state.http_client.lock().map_err(|e| e.to_string())?.clone();
