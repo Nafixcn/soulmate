@@ -138,7 +138,22 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
     const allMessages = [...state.messages, userMsg]
     const contextMessages = allMessages.slice(-CONTEXT_WINDOW)
-    const systemPrompt = buildSystemPrompt(persona)
+    let systemPrompt = buildSystemPrompt(persona)
+
+    if (aiSettings.useWebSearch) {
+      try {
+        const results = await invoke<{ title: string; snippet: string; url: string }[]>('search_web', {
+          query: content,
+        })
+        if (results.length > 0) {
+          const searchContext = results.map((r) => `- ${r.title}：${r.snippet}`).join('\n')
+          systemPrompt += `\n\n【联网搜索结果】以下是你可以在回复中参考的真实信息：\n${searchContext}\n请基于这些信息回答，如果搜索结果不相关就忽略。`
+        }
+      } catch {
+        /* search failed, continue without it */
+      }
+    }
+
     const apiMessages = [
       { role: 'system', content: systemPrompt },
       ...contextMessages.map((m) => ({ role: m.role, content: m.content })),
@@ -201,7 +216,22 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
     const remaining = get().messages
     const contextMessages = remaining.slice(-CONTEXT_WINDOW)
-    const systemPrompt = buildSystemPrompt(persona)
+    let systemPrompt = buildSystemPrompt(persona)
+
+    if (aiSettings.useWebSearch) {
+      try {
+        const results = await invoke<{ title: string; snippet: string; url: string }[]>('search_web', {
+          query: lastUserMsg.content,
+        })
+        if (results.length > 0) {
+          const searchContext = results.map((r) => `- ${r.title}：${r.snippet}`).join('\n')
+          systemPrompt += `\n\n【联网搜索结果】以下是你可以在回复中参考的真实信息：\n${searchContext}\n请基于这些信息回答，如果搜索结果不相关就忽略。`
+        }
+      } catch {
+        /* search failed */
+      }
+    }
+
     const apiMessages = [
       { role: 'system', content: systemPrompt },
       ...contextMessages.map((m) => ({ role: m.role, content: m.content })),

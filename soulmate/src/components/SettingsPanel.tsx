@@ -115,6 +115,19 @@ export const SettingsPanel: React.FC<Props> = ({ onClose }) => {
                     placeholder="deepseek-chat"
                   />
                 )}
+                <div className="form-group">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={aiSettings.useWebSearch}
+                      onChange={(e) => setAISettings({ useWebSearch: e.target.checked })}
+                    />{' '}
+                    联网搜索
+                  </label>
+                  <span style={{ fontSize: 11, color: '#998', marginTop: 2 }}>
+                    发送消息前搜索网络，用真实信息减少胡言乱语
+                  </span>
+                </div>
               </div>
               <div className="form-group">
                 <label>Temperature ({aiSettings.temperature})</label>

@@ -30,6 +30,7 @@ export interface AISettings {
   maxTokens: number
   autoProgress: boolean
   evalInterval: number
+  useWebSearch: boolean
 }
 
 export interface TTSSettings {

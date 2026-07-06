@@ -3,6 +3,7 @@
 mod db;
 mod ai;
 mod auth;
+mod search;
 // mod speech; — disabled: ObjC FFI causes SIGBUS on macOS 26
 
 use std::sync::Mutex;
@@ -75,6 +76,7 @@ pub fn run() {
             db::search_messages,
             get_auth_port,
             start_auth_server,
+            search::search_web,
         ])
         .run(tauri::generate_context!())
         .expect("应用启动失败");

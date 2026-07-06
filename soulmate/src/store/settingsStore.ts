@@ -71,6 +71,7 @@ const defaultAI: AISettings = {
   maxTokens: 512,
   autoProgress: false,
   evalInterval: 20,
+  useWebSearch: false,
 }
 
 const defaultTTS: TTSSettings = {
