@@ -25,9 +25,30 @@ export const PersonaEditor: React.FC<Props> = ({ persona, onChange, onClose }) =
   const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+    if (file.size > 500 * 1024) {
+      alert('图片不能超过500KB')
+      return
+    }
     const reader = new FileReader()
-    reader.onload = () => update('avatar', reader.result as string)
+    reader.onload = () => {
+      const img = new Image()
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        const maxSize = 200
+        let w = img.width
+        let h = img.height
+        if (w > h) { if (w > maxSize) { h *= maxSize / w; w = maxSize } }
+        else { if (h > maxSize) { w *= maxSize / h; h = maxSize } }
+        canvas.width = w
+        canvas.height = h
+        const ctx = canvas.getContext('2d')
+        ctx?.drawImage(img, 0, 0, w, h)
+        update('avatar', canvas.toDataURL('image/jpeg', 0.7))
+      }
+      img.src = reader.result as string
+    }
     reader.readAsDataURL(file)
+    e.target.value = ''
   }
 
   const handleRemoveAvatar = () => update('avatar', '')

@@ -89,10 +89,14 @@ function debouncedSave() {
   saveTimer = setTimeout(() => {
     const { aiSettings, ttsSettings, persona, personas, activePersonaIndex, theme, themePresetIndex } =
       useSettingsStore.getState()
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({ aiSettings, ttsSettings, persona, personas, activePersonaIndex, theme, themePresetIndex }),
-    )
+    try {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ aiSettings, ttsSettings, persona, personas, activePersonaIndex, theme, themePresetIndex }),
+      )
+    } catch {
+      console.warn('localStorage 已满，头像可能过大，请使用小于500KB的图片')
+    }
     saveTimer = null
   }, 300)
 }
