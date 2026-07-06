@@ -32,42 +32,41 @@ pub fn init_db(path: &Path) -> Result<Connection, Box<dyn std::error::Error>> {
 }
 
 #[tauri::command]
-pub fn get_messages(state: State<AppState>, limit: Option<i64>, offset: Option<i64>) -> Result<Vec<Message>, String> {
+pub fn get_messages(state: State<AppState>, limit: Option<i64>, before: Option<i64>) -> Result<Vec<Message>, String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
+    let n = limit.unwrap_or(200);
 
-    let (sql, params): (String, Vec<Box<dyn rusqlite::types::ToSql>>) = match (limit, offset) {
-        (Some(l), Some(o)) => {
-            let s = "SELECT id, role, content, thinking, timestamp FROM messages ORDER BY timestamp ASC LIMIT ?1 OFFSET ?2".to_string();
-            let p: Vec<Box<dyn rusqlite::types::ToSql>> = vec![Box::new(l), Box::new(o)];
-            (s, p)
-        }
-        (Some(l), None) => {
-            let s = "SELECT id, role, content, thinking, timestamp FROM messages ORDER BY timestamp ASC LIMIT ?1".to_string();
-            let p: Vec<Box<dyn rusqlite::types::ToSql>> = vec![Box::new(l)];
-            (s, p)
-        }
-        _ => {
-            let s = "SELECT id, role, content, thinking, timestamp FROM messages ORDER BY timestamp ASC".to_string();
-            let p: Vec<Box<dyn rusqlite::types::ToSql>> = vec![];
-            (s, p)
-        }
+    let msgs = if let Some(before_ts) = before {
+        let mut stmt = conn.prepare(
+            "SELECT id, role, content, thinking, timestamp FROM messages \
+             WHERE timestamp < ?1 ORDER BY timestamp DESC LIMIT ?2"
+        ).map_err(|e| e.to_string())?;
+        let rows = stmt.query_map(rusqlite::params![before_ts, n], |row| {
+            Ok(Message {
+                id: row.get(0)?, role: row.get(1)?, content: row.get(2)?,
+                thinking: row.get(3)?, timestamp: row.get(4)?,
+            })
+        }).map_err(|e| e.to_string())?;
+        let mut v: Vec<Message> = Vec::new();
+        for row in rows { v.push(row.map_err(|e| e.to_string())?); }
+        v.reverse();
+        v
+    } else {
+        let mut stmt = conn.prepare(
+            "SELECT id, role, content, thinking, timestamp FROM messages \
+             ORDER BY timestamp DESC LIMIT ?1"
+        ).map_err(|e| e.to_string())?;
+        let rows = stmt.query_map(rusqlite::params![n], |row| {
+            Ok(Message {
+                id: row.get(0)?, role: row.get(1)?, content: row.get(2)?,
+                thinking: row.get(3)?, timestamp: row.get(4)?,
+            })
+        }).map_err(|e| e.to_string())?;
+        let mut v: Vec<Message> = Vec::new();
+        for row in rows { v.push(row.map_err(|e| e.to_string())?); }
+        v.reverse();
+        v
     };
-
-    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
-    let params_ref: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
-    let rows = stmt.query_map(params_ref.as_slice(), |row| {
-        Ok(Message {
-            id: row.get(0)?,
-            role: row.get(1)?,
-            content: row.get(2)?,
-            thinking: row.get(3)?,
-            timestamp: row.get(4)?,
-        })
-    }).map_err(|e| e.to_string())?;
-    let mut msgs = Vec::new();
-    for row in rows {
-        msgs.push(row.map_err(|e| e.to_string())?);
-    }
     Ok(msgs)
 }
 

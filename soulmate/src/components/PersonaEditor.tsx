@@ -19,7 +19,7 @@ export const PersonaEditor: React.FC<Props> = ({ persona, onChange, onClose }) =
   const fileRef = useRef<HTMLInputElement>(null)
 
   const update = <K extends keyof Persona>(key: K, value: Persona[K]) => {
-    setDraft(prev => ({ ...prev, [key]: value }))
+    setDraft((prev) => ({ ...prev, [key]: value }))
   }
 
   const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -39,10 +39,12 @@ export const PersonaEditor: React.FC<Props> = ({ persona, onChange, onClose }) =
 
   return (
     <div className="persona-overlay" onClick={onClose}>
-      <div className="persona-panel" onClick={e => e.stopPropagation()}>
+      <div className="persona-panel" onClick={(e) => e.stopPropagation()}>
         <div className="persona-header">
           <h2>角色设定</h2>
-          <button className="close-btn" onClick={onClose}><X size={20} /></button>
+          <button className="close-btn" onClick={onClose}>
+            <X size={20} />
+          </button>
         </div>
         <div className="persona-body">
           <div className="form-group" style={{ alignItems: 'center' }}>
@@ -51,7 +53,9 @@ export const PersonaEditor: React.FC<Props> = ({ persona, onChange, onClose }) =
               {draft.avatar ? (
                 <div className="avatar-preview">
                   <img src={draft.avatar} alt="" className="avatar-img" />
-                  <button className="avatar-remove" onClick={handleRemoveAvatar}>×</button>
+                  <button className="avatar-remove" onClick={handleRemoveAvatar}>
+                    ×
+                  </button>
                 </div>
               ) : (
                 <button className="avatar-placeholder" onClick={() => fileRef.current?.click()}>
@@ -59,70 +63,117 @@ export const PersonaEditor: React.FC<Props> = ({ persona, onChange, onClose }) =
                   <Camera size={14} className="avatar-camera" />
                 </button>
               )}
-              <input ref={fileRef} type="file" accept="image/*" onChange={handleAvatarUpload} style={{ display: 'none' }} />
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                onChange={handleAvatarUpload}
+                style={{ display: 'none' }}
+              />
               {draft.avatar && (
-                <button className="tag" onClick={() => fileRef.current?.click()} style={{ marginTop: 6 }}>更换图片</button>
+                <button className="tag" onClick={() => fileRef.current?.click()} style={{ marginTop: 6 }}>
+                  更换图片
+                </button>
               )}
             </div>
           </div>
           <div className="form-group">
             <label>名字</label>
-            <input value={draft.name} onChange={e => update('name', e.target.value)} maxLength={8} />
+            <input value={draft.name} onChange={(e) => update('name', e.target.value)} maxLength={8} />
           </div>
           <div className="form-group">
             <label>年龄</label>
-            <input type="number" value={draft.age} onChange={e => { const v = parseInt(e.target.value); update('age', isNaN(v) ? 18 : v) }} min={16} max={30} />
+            <input
+              type="number"
+              value={draft.age}
+              onChange={(e) => {
+                const v = parseInt(e.target.value)
+                update('age', isNaN(v) ? 18 : v)
+              }}
+              min={16}
+              max={30}
+            />
           </div>
           <div className="form-group">
             <label>性格</label>
             <div className="tag-grid">
-              {PERSONALITIES.map(p => (
-                <button key={p} className={`tag ${draft.personality === p ? 'active' : ''}`} onClick={() => update('personality', p)}>{p}</button>
+              {PERSONALITIES.map((p) => (
+                <button
+                  key={p}
+                  className={`tag ${draft.personality === p ? 'active' : ''}`}
+                  onClick={() => update('personality', p)}
+                >
+                  {p}
+                </button>
               ))}
             </div>
           </div>
           <div className="form-group">
             <label>爱好</label>
-            <input value={draft.hobby} onChange={e => update('hobby', e.target.value)} placeholder="看电影、听音乐" />
+            <input value={draft.hobby} onChange={(e) => update('hobby', e.target.value)} placeholder="看电影、听音乐" />
           </div>
           <div className="form-group">
             <label>说话风格</label>
-            <textarea value={draft.speakingStyle} onChange={e => update('speakingStyle', e.target.value)} rows={2} />
+            <textarea value={draft.speakingStyle} onChange={(e) => update('speakingStyle', e.target.value)} rows={2} />
           </div>
           <div className="form-group">
             <label>关系阶段</label>
             <div className="tag-grid">
-              {STAGES.map(s => (
-                <button key={s} className={`tag ${draft.relationshipStage === s ? 'active' : ''}`} onClick={() => update('relationshipStage', s)}>{s}</button>
+              {STAGES.map((s) => (
+                <button
+                  key={s}
+                  className={`tag ${draft.relationshipStage === s ? 'active' : ''}`}
+                  onClick={() => update('relationshipStage', s)}
+                >
+                  {s}
+                </button>
               ))}
             </div>
           </div>
           <div className="form-group">
             <label>发色 / 瞳色</label>
             <div className="color-grid">
-              {HAIR.map(c => (
-                <button key={c} className={`color-btn ${draft.hairColor === c ? 'active' : ''}`} style={{ background: c }} onClick={() => update('hairColor', c)} />
+              {HAIR.map((c) => (
+                <button
+                  key={c}
+                  className={`color-btn ${draft.hairColor === c ? 'active' : ''}`}
+                  style={{ background: c }}
+                  onClick={() => update('hairColor', c)}
+                />
               ))}
             </div>
             <div className="color-grid" style={{ marginTop: 8 }}>
-              {EYES.map(c => (
-                <button key={c} className={`color-btn ${draft.eyeColor === c ? 'active' : ''}`} style={{ background: c }} onClick={() => update('eyeColor', c)} />
+              {EYES.map((c) => (
+                <button
+                  key={c}
+                  className={`color-btn ${draft.eyeColor === c ? 'active' : ''}`}
+                  style={{ background: c }}
+                  onClick={() => update('eyeColor', c)}
+                />
               ))}
             </div>
           </div>
           <div className="form-group">
             <label>图标</label>
             <div className="emoji-grid">
-              {ICONS.map(emoji => (
-                <button key={emoji} className={`emoji-btn ${draft.emoji === emoji ? 'active' : ''}`} onClick={() => update('emoji', emoji)}>
+              {ICONS.map((emoji) => (
+                <button
+                  key={emoji}
+                  className={`emoji-btn ${draft.emoji === emoji ? 'active' : ''}`}
+                  onClick={() => update('emoji', emoji)}
+                >
                   {emoji}
                 </button>
               ))}
             </div>
           </div>
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 8 }}>
-            <button className="tag" onClick={onClose} style={{ padding: '8px 24px' }}>取消</button>
-            <button className="tag active" onClick={handleSave} style={{ padding: '8px 24px' }}>保存</button>
+            <button className="tag" onClick={onClose} style={{ padding: '8px 24px' }}>
+              取消
+            </button>
+            <button className="tag active" onClick={handleSave} style={{ padding: '8px 24px' }}>
+              保存
+            </button>
           </div>
         </div>
       </div>

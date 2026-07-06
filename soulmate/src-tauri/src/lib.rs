@@ -3,7 +3,7 @@
 mod db;
 mod ai;
 mod auth;
-mod speech;
+// mod speech; — disabled: ObjC FFI causes SIGBUS on macOS 26
 
 use std::sync::Mutex;
 use dashmap::DashMap;
@@ -13,7 +13,7 @@ use auth::AuthServer;
 pub struct AppState {
     pub db: Mutex<rusqlite::Connection>,
     pub auth_server: Mutex<Option<AuthServer>>,
-    pub http_client: Mutex<reqwest::Client>,
+    pub http_client: reqwest::Client,
     pub cancelled_requests: std::sync::Arc<DashMap<String, bool>>,
 }
 
@@ -24,8 +24,15 @@ fn get_auth_port(state: tauri::State<AppState>) -> Result<u16, String> {
 }
 
 #[tauri::command]
-fn speech_to_text(audio: Vec<u8>) -> Result<String, String> {
-    speech::recognize_speech(audio, "zh-CN")
+fn start_auth_server(state: tauri::State<AppState>, app: tauri::AppHandle) -> Result<u16, String> {
+    let mut guard = state.auth_server.lock().map_err(|e| e.to_string())?;
+    if guard.is_some() {
+        return Ok(guard.as_ref().unwrap().port());
+    }
+    let server = auth::start_auth_server(app).map_err(|e| e.to_string())?;
+    let port = server.port();
+    *guard = Some(server);
+    Ok(port)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -50,15 +57,10 @@ pub fn run() {
             let state = AppState {
                 db: Mutex::new(conn),
                 auth_server: Mutex::new(None),
-                http_client: Mutex::new(http_client),
+                http_client,
                 cancelled_requests: std::sync::Arc::new(DashMap::new()),
             };
             app.manage(state);
-
-            let server = auth::start_auth_server(app.handle().clone())
-                .expect("认证服务启动失败");
-            *app.state::<AppState>().auth_server.lock()
-                .expect("认证服务锁获取失败") = Some(server);
 
             Ok(())
         })
@@ -72,7 +74,7 @@ pub fn run() {
             db::delete_messages_from,
             db::search_messages,
             get_auth_port,
-            speech_to_text,
+            start_auth_server,
         ])
         .run(tauri::generate_context!())
         .expect("应用启动失败");

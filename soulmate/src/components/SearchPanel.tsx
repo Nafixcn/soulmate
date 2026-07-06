@@ -1,26 +1,45 @@
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { Message } from '../types'
+import { invoke } from '@tauri-apps/api/core'
 import { X, Search } from 'lucide-react'
 
 interface Props {
-  messages: Message[]
   onClose: () => void
   onScrollTo: (timestamp: number) => void
 }
 
-export const SearchPanel: React.FC<Props> = ({ messages, onClose, onScrollTo }) => {
+export const SearchPanel: React.FC<Props> = ({ onClose, onScrollTo }) => {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<Message[]>([])
+  const [searching, setSearching] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => { inputRef.current?.focus() }, [])
+  const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
 
   useEffect(() => {
-    if (!query.trim()) { setResults([]); return }
-    const q = query.toLowerCase()
-    const filtered = messages.filter(m => m.content.toLowerCase().includes(q)).slice(0, 50)
-    setResults(filtered)
-  }, [query, messages])
+    inputRef.current?.focus()
+  }, [])
+
+  const doSearch = useCallback(async (q: string) => {
+    if (!q.trim()) {
+      setResults([])
+      return
+    }
+    setSearching(true)
+    try {
+      const msgs = await invoke<Message[]>('search_messages', { query: q })
+      setResults(msgs)
+    } catch (e) {
+      console.error('Search failed:', e)
+    } finally {
+      setSearching(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(() => doSearch(query), 250)
+    return () => clearTimeout(timerRef.current)
+  }, [query, doSearch])
 
   return (
     <div className="search-panel">
@@ -30,15 +49,25 @@ export const SearchPanel: React.FC<Props> = ({ messages, onClose, onScrollTo }) 
           ref={inputRef}
           className="search-input"
           value={query}
-          onChange={e => setQuery(e.target.value)}
+          onChange={(e) => setQuery(e.target.value)}
           placeholder="搜索消息..."
         />
-        <button className="search-close" onClick={onClose}><X size={14} /></button>
+        <button className="search-close" onClick={onClose}>
+          <X size={14} />
+        </button>
       </div>
+      {searching && results.length === 0 && <div className="search-empty">搜索中...</div>}
       {results.length > 0 && (
         <div className="search-results">
-          {results.map(msg => (
-            <div key={msg.id} className="search-result-item" onClick={() => { onScrollTo(msg.timestamp); onClose() }}>
+          {results.map((msg) => (
+            <div
+              key={msg.id}
+              className="search-result-item"
+              onClick={() => {
+                onScrollTo(msg.timestamp)
+                onClose()
+              }}
+            >
               <span className={`search-result-role ${msg.role}`}>{msg.role === 'user' ? '我' : 'TA'}</span>
               <span className="search-result-content">{highlightMatch(msg.content, query)}</span>
               <span className="search-result-time">{formatTime(msg.timestamp)}</span>
@@ -46,9 +75,7 @@ export const SearchPanel: React.FC<Props> = ({ messages, onClose, onScrollTo }) 
           ))}
         </div>
       )}
-      {query && results.length === 0 && (
-        <div className="search-empty">没有找到匹配的消息</div>
-      )}
+      {!searching && query && results.length === 0 && <div className="search-empty">没有找到匹配的消息</div>}
     </div>
   )
 }

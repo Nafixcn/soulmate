@@ -7,6 +7,7 @@ import { useSettingsStore } from './settingsStore'
 const CONTEXT_WINDOW = 30
 const MAX_RETRIES = 2
 const RETRY_DELAY_MS = 1500
+const PAGE_SIZE = 100
 
 interface ChatStore {
   messages: Message[]
@@ -19,10 +20,13 @@ interface ChatStore {
   abortController: AbortController | null
   requestId: string | null
   userMsgCount: number
+  hasMore: boolean
+  isLoadingMore: boolean
 
   setExpression: (expr: Expression) => void
   sendMessage: (content: string, persona: Persona, aiSettings: AISettings, ttsSettings: TTSSettings) => Promise<void>
   loadMessages: () => Promise<void>
+  loadEarlierMessages: () => Promise<void>
   clearChat: () => Promise<void>
   clearError: () => void
   deleteFrom: (fromTimestamp: number) => Promise<void>
@@ -35,7 +39,11 @@ async function cancelCurrent(state: ChatStore) {
     state.abortController.abort()
   }
   if (state.requestId) {
-    try { await invoke('cancel_request', { requestId: state.requestId }) } catch {}
+    try {
+      await invoke('cancel_request', { requestId: state.requestId })
+    } catch {
+      /* request already finished */
+    }
   }
 }
 
@@ -54,19 +62,38 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   abortController: null,
   requestId: null,
   userMsgCount: 0,
+  hasMore: false,
+  isLoadingMore: false,
 
   setExpression: (expression) => set({ expression }),
   clearError: () => set({ error: null }),
 
   loadMessages: async () => {
     try {
-      const msgs = await invoke<Message[]>('get_messages')
-      if (msgs.length > 0) {
-        set({ messages: msgs })
-      }
+      const msgs = await invoke<Message[]>('get_messages', { limit: PAGE_SIZE })
+      set({ messages: msgs, hasMore: msgs.length >= PAGE_SIZE })
     } catch (e) {
       console.error('Failed to load messages:', e)
       set({ error: '加载历史消息失败' })
+    }
+  },
+
+  loadEarlierMessages: async () => {
+    const { messages, isLoadingMore } = get()
+    if (isLoadingMore || messages.length === 0) return
+    set({ isLoadingMore: true })
+    try {
+      const firstTs = messages[0].timestamp
+      const older = await invoke<Message[]>('get_messages', { limit: PAGE_SIZE, before: firstTs })
+      if (older.length > 0) {
+        set({ messages: [...older, ...messages], hasMore: older.length >= PAGE_SIZE })
+      } else {
+        set({ hasMore: false })
+      }
+    } catch (e) {
+      console.error('Failed to load earlier messages:', e)
+    } finally {
+      set({ isLoadingMore: false })
     }
   },
 
@@ -89,7 +116,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       id: crypto.randomUUID(),
       role: 'user',
       content,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     }
 
     set({
@@ -114,14 +141,14 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     const systemPrompt = buildSystemPrompt(persona)
     const apiMessages = [
       { role: 'system', content: systemPrompt },
-      ...contextMessages.map(m => ({ role: m.role, content: m.content }))
+      ...contextMessages.map((m) => ({ role: m.role, content: m.content })),
     ]
 
     let lastError: string | null = null
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       if (controller.signal.aborted) return
       if (attempt > 0) {
-        await new Promise(r => setTimeout(r, RETRY_DELAY_MS * attempt))
+        await new Promise((r) => setTimeout(r, RETRY_DELAY_MS * attempt))
       }
       try {
         await doStream(apiMessages, aiSettings, reqId, controller, ttsSettings)
@@ -149,8 +176,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     } catch (e) {
       console.error('Failed to delete messages:', e)
     }
-    set(s => ({
-      messages: s.messages.filter(m => m.timestamp < fromTimestamp),
+    set((s) => ({
+      messages: s.messages.filter((m) => m.timestamp < fromTimestamp),
       ...resetCancelState(),
       expression: 'neutral',
       error: null,
@@ -162,7 +189,10 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     const msgs = state.messages
     let lastUserIdx = -1
     for (let i = msgs.length - 1; i >= 0; i--) {
-      if (msgs[i].role === 'user') { lastUserIdx = i; break }
+      if (msgs[i].role === 'user') {
+        lastUserIdx = i
+        break
+      }
     }
     if (lastUserIdx < 0) return
 
@@ -174,7 +204,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     const systemPrompt = buildSystemPrompt(persona)
     const apiMessages = [
       { role: 'system', content: systemPrompt },
-      ...contextMessages.map(m => ({ role: m.role, content: m.content }))
+      ...contextMessages.map((m) => ({ role: m.role, content: m.content })),
     ]
 
     const controller = new AbortController()
@@ -238,10 +268,10 @@ async function doStream(
         role: 'assistant',
         content: fullContent || '...',
         thinking: fullThinking || undefined,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       }
 
-      useChatStore.setState(s => ({
+      useChatStore.setState((s) => ({
         messages: [...s.messages, aiMsg],
         isTyping: false,
         streamingContent: '',
@@ -251,7 +281,7 @@ async function doStream(
         requestId: null,
       }))
 
-      invoke('save_message', { message: aiMsg }).catch(e => {
+      invoke('save_message', { message: aiMsg }).catch((e) => {
         console.error('Failed to save AI message:', e)
       })
 
@@ -284,11 +314,11 @@ async function doStream(
 
 function buildSystemPrompt(persona: Persona): string {
   const stageTips: Record<string, string> = {
-    '刚认识': '你们刚认识不久，保持礼貌友好的语气，可以慢慢了解对方。',
-    '朋友': '你们已经是朋友了，可以更放松自然地聊天，适当关心对方。',
-    '暧昧': '你们互相有好感，可以带一点小暧昧和暗示，偶尔撒娇。',
-    '热恋': '你们正在热恋中！可以主动表达爱意、撒娇、说情话，用亲昵称呼。',
-    '老夫老妻': '你们已经在一起很久了，像家人一样亲密，说话可以很随意自然。'
+    刚认识: '你们刚认识不久，保持礼貌友好的语气，可以慢慢了解对方。',
+    朋友: '你们已经是朋友了，可以更放松自然地聊天，适当关心对方。',
+    暧昧: '你们互相有好感，可以带一点小暧昧和暗示，偶尔撒娇。',
+    热恋: '你们正在热恋中！可以主动表达爱意、撒娇、说情话，用亲昵称呼。',
+    老夫老妻: '你们已经在一起很久了，像家人一样亲密，说话可以很随意自然。',
   }
   return `你是一个名叫${persona.name}的AI女友，正在和你的男朋友聊天。
  【角色设定】
@@ -308,14 +338,14 @@ function detectExpression(text: string): Expression {
   return 'neutral'
 }
 
-const EVAL_INTERVAL = 20
 const STAGE_ORDER = ['刚认识', '朋友', '暧昧', '热恋', '老夫老妻']
 
 async function maybeEvaluateRelation(persona: Persona, aiSettings: AISettings) {
   if (!aiSettings.autoProgress || !aiSettings.apiKey) return
 
   const state = useChatStore.getState()
-  if (state.userMsgCount % EVAL_INTERVAL !== 0) return
+  const interval = Math.max(1, aiSettings.evalInterval || 20)
+  if (state.userMsgCount % interval !== 0) return
 
   const msgs = state.messages.slice(-60)
   const evalMsgs: { role: string; content: string }[] = []
@@ -345,10 +375,10 @@ async function maybeEvaluateRelation(persona: Persona, aiSettings: AISettings) {
       useSettingsStore.getState().setPersona(updatedPersona)
 
       const levelNames: Record<string, string> = {
-        '朋友': '💛 你们成为朋友了',
-        '暧昧': '💗 关系升温，开始暧昧了',
-        '热恋': '❤️ 热恋中！',
-        '老夫老妻': '🏡 老夫老妻般的默契',
+        朋友: '💛 你们成为朋友了',
+        暧昧: '💗 关系升温，开始暧昧了',
+        热恋: '❤️ 热恋中！',
+        老夫老妻: '🏡 老夫老妻般的默契',
       }
 
       const greeting = levelNames[newStage] || `💕 关系升级：${newStage}`
@@ -356,9 +386,9 @@ async function maybeEvaluateRelation(persona: Persona, aiSettings: AISettings) {
         id: crypto.randomUUID(),
         role: 'assistant' as const,
         content: greeting,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       }
-      useChatStore.setState(s => ({ messages: [...s.messages, notifyMsg] }))
+      useChatStore.setState((s) => ({ messages: [...s.messages, notifyMsg] }))
       invoke('save_message', { message: notifyMsg }).catch(() => {})
 
       if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {

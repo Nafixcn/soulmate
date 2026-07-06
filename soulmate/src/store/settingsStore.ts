@@ -49,7 +49,7 @@ interface SettingsStore {
   setTTSSettings: (s: Partial<TTSSettings>) => void
   setPersona: (p: Persona) => void
   applyPreset: (index: number) => void
-  loadFromStorage: () => void
+  loadFromStorage: () => Promise<void>
   saveToStorage: () => void
   addPersona: (p: Persona) => void
   updatePersona: (index: number, p: Persona) => void
@@ -66,6 +66,7 @@ const defaultAI: AISettings = {
   temperature: 0.85,
   maxTokens: 512,
   autoProgress: false,
+  evalInterval: 20,
 }
 
 const defaultTTS: TTSSettings = {
@@ -73,7 +74,7 @@ const defaultTTS: TTSSettings = {
   autoPlay: false,
   rate: 1.1,
   pitch: 1.2,
-  voiceURI: ''
+  voiceURI: '',
 }
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null
@@ -82,7 +83,10 @@ function debouncedSave() {
   if (saveTimer) clearTimeout(saveTimer)
   saveTimer = setTimeout(() => {
     const { aiSettings, ttsSettings, persona, personas, activePersonaIndex } = useSettingsStore.getState()
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ aiSettings, ttsSettings, persona, personas, activePersonaIndex }))
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ aiSettings, ttsSettings, persona, personas, activePersonaIndex }),
+    )
     saveTimer = null
   }, 300)
 }
@@ -106,7 +110,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     debouncedSave()
   },
   setTTSSettings: (partial) => {
-    set(s => ({ ttsSettings: { ...s.ttsSettings, ...partial } }))
+    set((s) => ({ ttsSettings: { ...s.ttsSettings, ...partial } }))
     debouncedSave()
   },
   setPersona: (persona) => {
@@ -122,8 +126,12 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
   applyPreset: (index) => {
     const preset = API_PRESETS[index]
     if (!preset) return
-    set(s => ({
-      aiSettings: { ...s.aiSettings, endpoint: preset.endpoint || s.aiSettings.endpoint, model: preset.models[0] || s.aiSettings.model }
+    set((s) => ({
+      aiSettings: {
+        ...s.aiSettings,
+        endpoint: preset.endpoint || s.aiSettings.endpoint,
+        model: preset.models[0] || s.aiSettings.model,
+      },
     }))
     debouncedSave()
   },
@@ -156,7 +164,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     set({ persona: personas[index], activePersonaIndex: index })
     debouncedSave()
   },
-  loadFromStorage: () => {
+  loadFromStorage: async () => {
     try {
       let raw = localStorage.getItem(STORAGE_KEY)
       if (!raw) {
@@ -182,23 +190,32 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
           persona: { ...DEFAULT_PERSONA, ...data.persona },
           personas: loadedPersonas.map((p: Persona) => ({ ...DEFAULT_PERSONA, ...p })),
           activePersonaIndex: Math.min(activeIdx, loadedPersonas.length - 1),
-          aiConfigured: !!(data.aiSettings?.apiKey),
+          aiConfigured: !!data.aiSettings?.apiKey,
         })
       }
-    } catch (e) { console.warn('load settings:', e) }
+    } catch (e) {
+      console.warn('load settings:', e)
+    }
 
-    loadApiKeyFromStore().then(apiKey => {
+    try {
+      const apiKey = await loadApiKeyFromStore()
       if (apiKey) {
         const current = get()
         set({
           aiSettings: { ...current.aiSettings, apiKey },
           aiConfigured: true,
         })
+        get().saveToStorage()
       }
-    })
+    } catch {
+      /* Tauri store unavailable */
+    }
   },
   saveToStorage: () => {
     const { aiSettings, ttsSettings, persona, personas, activePersonaIndex } = get()
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ aiSettings, ttsSettings, persona, personas, activePersonaIndex }))
-  }
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ aiSettings, ttsSettings, persona, personas, activePersonaIndex }),
+    )
+  },
 }))

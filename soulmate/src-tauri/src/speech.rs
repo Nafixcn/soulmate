@@ -8,7 +8,7 @@ use std::io::Write;
 #[cfg(target_os = "macos")]
 pub fn recognize_speech(audio_data: Vec<u8>, locale: &str) -> Result<String, String> {
     let mut tmp = std::env::temp_dir();
-    tmp.push(format!("soulmate_stt_{}.mp4", std::process::id()));
+    tmp.push(format!("soulmate_stt_{}.m4a", std::process::id()));
     {
         let mut f = std::fs::File::create(&tmp).map_err(|e| e.to_string())?;
         f.write_all(&audio_data).map_err(|e| e.to_string())?;

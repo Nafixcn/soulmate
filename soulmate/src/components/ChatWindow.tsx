@@ -2,6 +2,8 @@ import React, { useRef, useEffect, useCallback, useState } from 'react'
 import { useChatStore } from '../store/chatStore'
 import { useSettingsStore } from '../store/settingsStore'
 import { invoke } from '@tauri-apps/api/core'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { ChatHeader } from './ChatHeader'
 import { MessageBubble } from './MessageBubble'
 import { ChatInput } from './ChatInput'
@@ -55,10 +57,12 @@ function scheduleDailyGreetings(addGreeting: (text: string) => void) {
 
     const delay = target.getTime() - now.getTime()
     const greeting = GREETINGS[Math.floor(Math.random() * GREETINGS.length)]
-    timers.push(setTimeout(() => {
-      addGreeting(greeting)
-      showNotification(greeting)
-    }, delay))
+    timers.push(
+      setTimeout(() => {
+        addGreeting(greeting)
+        showNotification(greeting)
+      }, delay),
+    )
   }
 
   return timers
@@ -69,14 +73,14 @@ function showNotification(body: string) {
   if (Notification.permission === 'granted') {
     new Notification('灵伴', { body, silent: false })
   } else if (Notification.permission !== 'denied') {
-    Notification.requestPermission().then(p => {
+    Notification.requestPermission().then((p) => {
       if (p === 'granted') new Notification('灵伴', { body, silent: false })
     })
   }
 }
 
 function exportChat(messages: { role: string; content: string; timestamp: number }[], personaName: string): void {
-  const lines = messages.map(m => {
+  const lines = messages.map((m) => {
     const time = new Date(m.timestamp).toLocaleString('zh-CN')
     const sender = m.role === 'user' ? '我' : personaName
     return `[${time}] ${sender}：${m.content}`
@@ -92,18 +96,22 @@ function exportChat(messages: { role: string; content: string; timestamp: number
 }
 
 export const ChatWindow: React.FC = () => {
-  const messages = useChatStore(s => s.messages)
-  const isTyping = useChatStore(s => s.isTyping)
-  const error = useChatStore(s => s.error)
-  const streamingContent = useChatStore(s => s.streamingContent)
-  const streamingThinking = useChatStore(s => s.streamingThinking)
-  const sendMessage = useChatStore(s => s.sendMessage)
-  const clearChat = useChatStore(s => s.clearChat)
-  const clearError = useChatStore(s => s.clearError)
-  const loadMessages = useChatStore(s => s.loadMessages)
-  const deleteFrom = useChatStore(s => s.deleteFrom)
-  const regenerate = useChatStore(s => s.regenerate)
-  const { aiSettings, ttsSettings, persona, personas, activePersonaIndex, setPersona, switchPersona } = useSettingsStore()
+  const messages = useChatStore((s) => s.messages)
+  const isTyping = useChatStore((s) => s.isTyping)
+  const error = useChatStore((s) => s.error)
+  const streamingContent = useChatStore((s) => s.streamingContent)
+  const streamingThinking = useChatStore((s) => s.streamingThinking)
+  const sendMessage = useChatStore((s) => s.sendMessage)
+  const clearChat = useChatStore((s) => s.clearChat)
+  const clearError = useChatStore((s) => s.clearError)
+  const loadMessages = useChatStore((s) => s.loadMessages)
+  const loadEarlierMessages = useChatStore((s) => s.loadEarlierMessages)
+  const hasMore = useChatStore((s) => s.hasMore)
+  const isLoadingMore = useChatStore((s) => s.isLoadingMore)
+  const deleteFrom = useChatStore((s) => s.deleteFrom)
+  const regenerate = useChatStore((s) => s.regenerate)
+  const { aiSettings, ttsSettings, persona, personas, activePersonaIndex, setPersona, switchPersona } =
+    useSettingsStore()
 
   const [showEditor, setShowEditor] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
@@ -118,68 +126,92 @@ export const ChatWindow: React.FC = () => {
       duration: 8 + Math.random() * 10,
       size: 14 + Math.random() * 14,
       emoji: PETALS[Math.floor(Math.random() * PETALS.length)],
-    }))
+    })),
   )
   const bottomRef = useRef<HTMLDivElement>(null)
-  const initialized = useRef(false)
   const loaded = useRef(false)
   const greetingTimers = useRef<ReturnType<typeof setTimeout>[]>([])
   const messagesRef = useRef<HTMLDivElement>(null)
+  const scrollAnchorRef = useRef<number>(0)
 
   const addGreeting = useCallback((text: string) => {
     const msg = {
       id: crypto.randomUUID(),
       role: 'assistant' as const,
       content: text,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     }
-    useChatStore.setState(s => ({
-      messages: [...s.messages, msg]
+    useChatStore.setState((s) => ({
+      messages: [...s.messages, msg],
     }))
-    invoke('save_message', { message: msg }).catch(e => {
+    invoke('save_message', { message: msg }).catch((e) => {
       console.error('Failed to save greeting:', e)
     })
   }, [])
 
   useEffect(() => {
-    loadMessages().finally(() => { loaded.current = true })
+    loadMessages().finally(() => {
+      loaded.current = true
+    })
   }, [loadMessages])
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages, isTyping, streamingContent])
 
   useEffect(() => {
-    if (initialized.current) return
-    initialized.current = true
+    const el = messagesRef.current
+    if (!el) return
+    const handleScroll = () => {
+      if (el.scrollTop < 40 && hasMore && !isLoadingMore) {
+        scrollAnchorRef.current = el.scrollHeight
+        loadingMore.current = true
+        loadEarlierMessages()
+      }
+    }
+    el.addEventListener('scroll', handleScroll, { passive: true })
+    return () => el.removeEventListener('scroll', handleScroll)
+  }, [hasMore, isLoadingMore, loadEarlierMessages])
 
+  useEffect(() => {
+    const el = messagesRef.current
+    if (el && scrollAnchorRef.current > 0) {
+      requestAnimationFrame(() => {
+        el.scrollTop = el.scrollHeight - scrollAnchorRef.current
+        scrollAnchorRef.current = 0
+      })
+    }
+  }, [messages])
+
+  const loadingMore = useRef(false)
+  useEffect(() => {
+    if (loadingMore.current) {
+      loadingMore.current = false
+      return
+    }
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages, isTyping, streamingContent])
+
+  useEffect(() => {
+    if (!loaded.current) return
+    const msgs = useChatStore.getState().messages
+    if (msgs.length > 0) return
     const showInitialGreeting = () => {
+      const greeting = {
+        id: crypto.randomUUID(),
+        role: 'assistant' as const,
+        content: '你好呀~今天想聊点什么呢？',
+        timestamp: Date.now(),
+      }
       useChatStore.setState({ messages: [greeting] })
-      invoke('save_message', { message: greeting }).catch(e => {
+      invoke('save_message', { message: greeting }).catch((e) => {
         console.error('Failed to save initial greeting:', e)
       })
     }
-
-    const greeting = {
-      id: crypto.randomUUID(),
-      role: 'assistant' as const,
-      content: '你好呀~今天想聊点什么呢？',
-      timestamp: Date.now()
-    }
-
-    const interval = setInterval(() => {
-      const msgs = useChatStore.getState().messages
-      if (loaded.current && msgs.length === 0) {
-        showInitialGreeting()
-        clearInterval(interval)
-      }
-      if (msgs.length > 0) {
-        clearInterval(interval)
-      }
-    }, 50)
-
-    return () => clearInterval(interval)
-  }, [])
+    showInitialGreeting()
+  }, [loaded.current]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (error) { const t = setTimeout(clearError, 8000); return () => clearTimeout(t) }
+    if (error) {
+      const t = setTimeout(clearError, 8000)
+      return () => clearTimeout(t)
+    }
   }, [error, clearError])
 
   useEffect(() => {
@@ -200,7 +232,7 @@ export const ChatWindow: React.FC = () => {
       }
       if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
         e.preventDefault()
-        setShowSearch(prev => !prev)
+        setShowSearch((prev) => !prev)
       }
       if ((e.ctrlKey || e.metaKey) && e.key === 'e') {
         e.preventDefault()
@@ -211,11 +243,17 @@ export const ChatWindow: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [messages, persona.name])
 
-  const handleSend = useCallback((text: string) => sendMessage(text, persona, aiSettings, ttsSettings), [persona, aiSettings, ttsSettings, sendMessage])
+  const handleSend = useCallback(
+    (text: string) => sendMessage(text, persona, aiSettings, ttsSettings),
+    [persona, aiSettings, ttsSettings, sendMessage],
+  )
 
-  const handleDeleteFrom = useCallback((ts: number) => {
-    deleteFrom(ts)
-  }, [deleteFrom])
+  const handleDeleteFrom = useCallback(
+    (ts: number) => {
+      deleteFrom(ts)
+    },
+    [deleteFrom],
+  )
 
   const handleRegenerate = useCallback(() => {
     regenerate(persona, aiSettings, ttsSettings)
@@ -230,90 +268,118 @@ export const ChatWindow: React.FC = () => {
     }
   }, [])
 
-  const lastAssistantIdx = messages.reduce((acc, m, i) => m.role === 'assistant' ? i : acc, -1)
+  const lastAssistantIdx = messages.reduce((acc, m, i) => (m.role === 'assistant' ? i : acc), -1)
 
   return (
     <div className="chat-window">
       <div className="sakura-petals">
-        {petals.map(p => (
-          <div key={p.id} className="sakura-petal" style={{
-            left: `${p.left}%`, animationDelay: `${p.delay}s`,
-            animationDuration: `${p.duration}s`, fontSize: p.size,
-          }}>{p.emoji}</div>
+        {petals.map((p) => (
+          <div
+            key={p.id}
+            className="sakura-petal"
+            style={{
+              left: `${p.left}%`,
+              animationDelay: `${p.delay}s`,
+              animationDuration: `${p.duration}s`,
+              fontSize: p.size,
+            }}
+          >
+            {p.emoji}
+          </div>
         ))}
       </div>
       <ChatHeader
-        persona={persona} personas={personas} activePersonaIndex={activePersonaIndex}
+        persona={persona}
+        personas={personas}
+        activePersonaIndex={activePersonaIndex}
         onEditPersona={() => setShowEditor(true)}
         onManagePersonas={() => setShowManagePersonas(true)}
         onSettings={() => setShowSettings(true)}
         onClearChat={clearChat}
         onSwitchPersona={switchPersona}
       />
-      <div className="chat-body">
-        {error && <div className="error-banner" onClick={clearError}><AlertTriangle size={14} /> {error}</div>}
-        {showSearch && <SearchPanel messages={messages} onClose={() => setShowSearch(false)} onScrollTo={scrollToMessage} />}
-        <div className="chat-toolbar">
-          <button className="toolbar-btn" onClick={() => setShowSearch(!showSearch)} title="搜索 (Ctrl+F)">
-            <Search size={14} />
-          </button>
-          <button className="toolbar-btn" onClick={() => exportChat(messages, persona.name)} title="导出 (Ctrl+E)">
-            <Download size={14} />
-          </button>
-        </div>
-        <div className="chat-messages" ref={messagesRef}>
-          <div className="messages-container">
-            {messages.map((msg, idx) => (
-              <div key={msg.id} data-ts={msg.timestamp}>
-                <MessageBubble
-                  message={msg}
-                  persona={persona}
-                  onDelete={handleDeleteFrom}
-                  onRegenerate={idx === lastAssistantIdx ? handleRegenerate : undefined}
-                  isLast={idx === lastAssistantIdx}
-                />
-              </div>
-            ))}
-            {isTyping && !streamingContent && (
-              <div className="typing-indicator">
-                <div className="msg-avatar">
-                  {persona.avatar
-                    ? <img src={persona.avatar} className="avatar-img-msg" alt="" />
-                    : <span>{persona.emoji}</span>
-                  }
+      <div className="chat-main">
+        <div className="chat-body">
+          {error && (
+            <div className="error-banner" onClick={clearError}>
+              <AlertTriangle size={14} /> {error}
+            </div>
+          )}
+          {showSearch && <SearchPanel onClose={() => setShowSearch(false)} onScrollTo={scrollToMessage} />}
+          <div className="chat-toolbar">
+            <button className="toolbar-btn" onClick={() => setShowSearch(!showSearch)} title="搜索 (Ctrl+F)">
+              <Search size={14} />
+            </button>
+            <button className="toolbar-btn" onClick={() => exportChat(messages, persona.name)} title="导出 (Ctrl+E)">
+              <Download size={14} />
+            </button>
+          </div>
+          <div className="chat-messages" ref={messagesRef}>
+            <div className="messages-container">
+              {isLoadingMore && <div className="loading-more">加载更早的消息中...</div>}
+              {messages.map((msg, idx) => (
+                <div key={msg.id} data-ts={msg.timestamp}>
+                  <MessageBubble
+                    message={msg}
+                    persona={persona}
+                    onDelete={handleDeleteFrom}
+                    onRegenerate={idx === lastAssistantIdx ? handleRegenerate : undefined}
+                    isLast={idx === lastAssistantIdx}
+                  />
                 </div>
-                <div className="typing-dots"><span></span><span></span><span></span></div>
-              </div>
-            )}
-            {isTyping && streamingContent && (
-              <div className="msg-row">
-                <div className="msg-avatar">
-                  {persona.avatar
-                    ? <img src={persona.avatar} className="avatar-img-msg" alt="" />
-                    : <span>{persona.emoji}</span>
-                  }
-                </div>
-                <div className="msg-body">
-                  {streamingThinking && (
-                    <div className="thinking-wrapper">
-                      <div className="thinking-toggle" onClick={() => setStreamingThinkOpen(!streamingThinkOpen)}>
-                        <span className="think-arrow">{streamingThinkOpen ? '▾' : '▸'}</span>
-                        思考过程
-                      </div>
-                      {streamingThinkOpen && <div className="thinking-block">{streamingThinking}</div>}
-                    </div>
-                  )}
-                  <div className="msg-bubble ai-bubble streaming-markdown">
-                    {streamingContent}<span className="cursor-blink">|</span>
+              ))}
+              {isTyping && !streamingContent && (
+                <div className="typing-indicator">
+                  <div className="msg-avatar">
+                    {persona.avatar ? (
+                      <img src={persona.avatar} className="avatar-img-msg" alt="" />
+                    ) : (
+                      <span>{persona.emoji}</span>
+                    )}
+                  </div>
+                  <div className="typing-dots">
+                    <span></span>
+                    <span></span>
+                    <span></span>
                   </div>
                 </div>
-              </div>
-            )}
-            <div ref={bottomRef} />
+              )}
+              {isTyping && streamingContent && (
+                <div className="msg-row">
+                  <div className="msg-avatar">
+                    {persona.avatar ? (
+                      <img src={persona.avatar} className="avatar-img-msg" alt="" />
+                    ) : (
+                      <span>{persona.emoji}</span>
+                    )}
+                  </div>
+                  <div className="msg-body">
+                    {streamingThinking && (
+                      <div className="thinking-wrapper">
+                        <div className="thinking-toggle" onClick={() => setStreamingThinkOpen(!streamingThinkOpen)}>
+                          <span className="think-arrow">{streamingThinkOpen ? '▾' : '▸'}</span>
+                          思考过程
+                        </div>
+                        {streamingThinkOpen && (
+                          <div className="thinking-block">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{streamingThinking}</ReactMarkdown>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    <div className="msg-bubble ai-bubble streaming-markdown">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{streamingContent}</ReactMarkdown>
+                      <span className="cursor-blink">|</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+              <div ref={bottomRef} />
+            </div>
           </div>
         </div>
+        <ChatInput onSend={handleSend} disabled={isTyping} />
       </div>
-      <ChatInput onSend={handleSend} disabled={isTyping} />
       {showEditor && <PersonaEditor persona={persona} onChange={setPersona} onClose={() => setShowEditor(false)} />}
       {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
       {showManagePersonas && (

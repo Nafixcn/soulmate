@@ -33,7 +33,7 @@ pub async fn send_message(
 
     let messages: Vec<serde_json::Value> = serde_json::from_str(&messages_json).map_err(|e| e.to_string())?;
 
-    let client = state.http_client.lock().map_err(|e| e.to_string())?.clone();
+    let client = &state.http_client;
     let cancelled: Arc<DashMap<String, bool>> = state.cancelled_requests.clone();
     cancelled.insert(request_id.clone(), false);
 
@@ -136,7 +136,7 @@ pub async fn evaluate_relationship(
         return Err("API 端点必须使用 HTTPS 协议（本地开发地址除外）以确保安全".into());
     }
 
-    let client = state.http_client.lock().map_err(|e| e.to_string())?.clone();
+    let client = &state.http_client;
 
     let eval_prompt = "你是一个情感分析专家。分析以下聊天记录，判断两人的亲密关系处于哪个阶段。\
         只回复五个词之一，不要任何其他文字：刚认识,朋友,暧昧,热恋,老夫老妻。\

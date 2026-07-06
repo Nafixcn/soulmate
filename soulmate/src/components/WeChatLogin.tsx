@@ -17,28 +17,34 @@ interface Props {
 export const WeChatLogin: React.FC<Props> = ({ onLogin }) => {
   const [user, setUser] = React.useState<WeChatUser | null>(null)
   const [loggingIn, setLoggingIn] = React.useState(false)
-  const [port, setPort] = React.useState(0)
   const onLoginRef = useRef(onLogin)
   onLoginRef.current = onLogin
 
   useEffect(() => {
-    invoke<number>('get_auth_port').then(setPort).catch(() => {})
     const unlisten = listen<WeChatUser>('auth-success', (event) => {
       setUser(event.payload)
       setLoggingIn(false)
       onLoginRef.current?.(event.payload)
     })
-    return () => { unlisten.then(fn => fn()) }
+    return () => {
+      unlisten.then((fn) => fn())
+    }
   }, [])
 
-  const handleLogin = () => {
-    if (!WECHAT_APPID || !port) return
+  const handleLogin = async () => {
+    if (!WECHAT_APPID) return
     setLoggingIn(true)
-    const redirectUri = encodeURIComponent(`https://${WECHAT_WORKER}/callback`)
-    window.open(
-      `https://open.weixin.qq.com/connect/oauth2/authorize?appid=${WECHAT_APPID}&redirect_uri=${redirectUri}&response_type=code&scope=snsapi_userinfo&state=${port}#wechat_redirect`,
-      '_blank'
-    )
+    try {
+      const authPort = await invoke<number>('start_auth_server')
+      const redirectUri = encodeURIComponent(`https://${WECHAT_WORKER}/callback`)
+      window.open(
+        `https://open.weixin.qq.com/connect/oauth2/authorize?appid=${WECHAT_APPID}&redirect_uri=${redirectUri}&response_type=code&scope=snsapi_userinfo&state=${authPort}#wechat_redirect`,
+        '_blank',
+      )
+    } catch (e) {
+      console.error('Failed to start auth:', e)
+      setLoggingIn(false)
+    }
   }
 
   if (user) {
@@ -51,7 +57,7 @@ export const WeChatLogin: React.FC<Props> = ({ onLogin }) => {
   }
 
   return (
-    <button className="header-btn" onClick={handleLogin} disabled={loggingIn || !port} title="微信登录">
+    <button className="header-btn" onClick={handleLogin} disabled={loggingIn} title="微信登录">
       <LogIn size={18} />
     </button>
   )

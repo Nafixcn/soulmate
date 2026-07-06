@@ -18,7 +18,11 @@ export const MessageBubble: React.FC<Props> = ({ message, persona, onDelete, onR
 
   if (message.role === 'user') {
     return (
-      <div className="msg-row user" onMouseEnter={() => setShowActions(true)} onMouseLeave={() => setShowActions(false)}>
+      <div
+        className="msg-row user"
+        onMouseEnter={() => setShowActions(true)}
+        onMouseLeave={() => setShowActions(false)}
+      >
         <div className="msg-bubble user-bubble">{message.content}</div>
         {showActions && onDelete && (
           <button className="msg-action-btn" onClick={() => onDelete(message.timestamp)} title="删除此后消息">
@@ -32,10 +36,7 @@ export const MessageBubble: React.FC<Props> = ({ message, persona, onDelete, onR
   return (
     <div className="msg-row" onMouseEnter={() => setShowActions(true)} onMouseLeave={() => setShowActions(false)}>
       <div className="msg-avatar">
-        {persona.avatar
-          ? <img src={persona.avatar} className="avatar-img-msg" alt="" />
-          : <span>{persona.emoji}</span>
-        }
+        {persona.avatar ? <img src={persona.avatar} className="avatar-img-msg" alt="" /> : <span>{persona.emoji}</span>}
       </div>
       <div className="msg-body">
         {message.thinking && (
