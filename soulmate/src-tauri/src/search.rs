@@ -22,7 +22,8 @@ struct WikiQuery {
 struct WikiPage {
     title: String,
     snippet: String,
-    pageid: u64,
+    #[serde(rename = "pageid")]
+    _pageid: u64,
 }
 
 #[tauri::command]
