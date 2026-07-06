@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useCallback, useState } from 'react'
+import React, { useRef, useEffect, useCallback, useState, useMemo } from 'react'
 import { useChatStore } from '../store/chatStore'
 import { useSettingsStore } from '../store/settingsStore'
 import { invoke } from '@tauri-apps/api/core'
@@ -117,16 +117,17 @@ export const ChatWindow: React.FC = () => {
   const [showManagePersonas, setShowManagePersonas] = useState(false)
   const [showSearch, setShowSearch] = useState(false)
   const [streamingThinkOpen, setStreamingThinkOpen] = useState(true)
-  const [petals] = useState(() =>
-    Array.from({ length: petalCount }, (_, i) => ({
+  const [petals] = useMemo(() => {
+    const arr = Array.from({ length: petalCount }, (_, i) => ({
       id: i,
       left: Math.random() * 100,
       delay: Math.random() * 12,
       duration: 8 + Math.random() * 10,
       size: 14 + Math.random() * 14,
       emoji: theme.petals[Math.floor(Math.random() * theme.petals.length)],
-    })),
-  )
+    }))
+    return [arr] as const
+  }, [theme.petals])
   const bottomRef = useRef<HTMLDivElement>(null)
   const loaded = useRef(false)
   const greetingTimers = useRef<ReturnType<typeof setTimeout>[]>([])
