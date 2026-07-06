@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react'
+import React, { useState } from 'react'
 import { Persona } from '../types'
 import { X, Camera } from 'lucide-react'
 
@@ -16,7 +16,6 @@ const EYES = ['#ff6b9d', '#8B4513', '#9b59b6', '#4a90d9', '#5dae7e', '#e8b848', 
 
 export const PersonaEditor: React.FC<Props> = ({ persona, onChange, onClose }) => {
   const [draft, setDraft] = useState<Persona>({ ...persona })
-  const fileRef = useRef<HTMLInputElement>(null)
 
   const update = <K extends keyof Persona>(key: K, value: Persona[K]) => {
     setDraft((prev) => ({ ...prev, [key]: value }))
@@ -80,22 +79,27 @@ export const PersonaEditor: React.FC<Props> = ({ persona, onChange, onClose }) =
                   </button>
                 </div>
               ) : (
-                <button className="avatar-placeholder" onClick={() => fileRef.current?.click()}>
+                <label className="avatar-placeholder" style={{ cursor: 'pointer' }}>
                   <span className="avatar-emoji-lg">{draft.emoji}</span>
                   <Camera size={14} className="avatar-camera" />
-                </button>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleAvatarUpload}
+                    style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
+                  />
+                </label>
               )}
-              <input
-                ref={fileRef}
-                type="file"
-                accept="image/*"
-                onChange={handleAvatarUpload}
-                style={{ display: 'none' }}
-              />
               {draft.avatar && (
-                <button className="tag" onClick={() => fileRef.current?.click()} style={{ marginTop: 6 }}>
+                <label className="tag" style={{ marginTop: 6, cursor: 'pointer' }}>
                   更换图片
-                </button>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleAvatarUpload}
+                    style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
+                  />
+                </label>
               )}
             </div>
           </div>
