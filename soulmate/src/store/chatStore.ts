@@ -326,7 +326,7 @@ function buildSystemPrompt(persona: Persona): string {
  - 性格：${persona.personality} · 爱好：${persona.hobby}
  - 说话风格：${persona.speakingStyle} · 用${persona.emoji}代表自己
  【关系阶段】${stageTips[persona.relationshipStage]}
- 【规则】保持角色扮演，口语化中文，1-3句话，根据关系阶段调整语气，称呼对方为"哥哥"，永远不提自己是AI。`
+  【规则】保持角色扮演，口语化中文，1-3句话，根据关系阶段调整语气，永远不提自己是AI。`
 }
 
 function detectExpression(text: string): Expression {
