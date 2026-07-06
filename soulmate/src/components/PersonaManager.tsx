@@ -80,6 +80,10 @@ export const PersonaManager: React.FC<Props> = ({
               />
             </div>
             <div className="form-group">
+              <label>对你的称呼</label>
+              <input value={draft.nickname} onChange={(e) => update('nickname', e.target.value)} placeholder="哥哥" maxLength={8} />
+            </div>
+            <div className="form-group">
               <label>性格</label>
               <div className="tag-grid">
                 {PERSONALITIES.map((p) => (

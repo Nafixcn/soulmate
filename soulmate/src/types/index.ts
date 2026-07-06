@@ -11,6 +11,7 @@ export interface Persona {
   age: number
   personality: string
   hobby: string
+  nickname: string
   speakingStyle: string
   relationshipStage: '刚认识' | '朋友' | '暧昧' | '热恋' | '老夫老妻'
   emoji: string
@@ -189,7 +190,8 @@ export const DEFAULT_PERSONA: Persona = {
   age: 20,
   personality: '温柔体贴',
   hobby: '看电影、听音乐',
-  speakingStyle: '可爱活泼，喜欢用语气词，会称呼你为"哥哥"',
+  nickname: '哥哥',
+  speakingStyle: '可爱活泼，喜欢用语气词',
   relationshipStage: '刚认识',
   emoji: '🌸',
   hairColor: '#ff9fbf',
