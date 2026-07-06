@@ -142,7 +142,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     const contextMessages = allMessages.slice(-CONTEXT_WINDOW)
     let systemPrompt = buildSystemPrompt(persona)
 
-    if (aiSettings.useWebSearch) {
+    if (aiSettings.useWebSearch && /[？?]|为什么|是什么|怎么|如何|哪个|什么|谁|哪|几点|多少/.test(content)) {
       try {
         const results = await invoke<{ title: string; snippet: string; url: string }[]>('search_web', {
           query: content,
@@ -220,7 +220,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     const contextMessages = remaining.slice(-CONTEXT_WINDOW)
     let systemPrompt = buildSystemPrompt(persona)
 
-    if (aiSettings.useWebSearch) {
+    if (aiSettings.useWebSearch && /[？?]|为什么|是什么|怎么|如何|哪个|什么|谁|哪|几点|多少/.test(lastUserMsg.content)) {
       try {
         const results = await invoke<{ title: string; snippet: string; url: string }[]>('search_web', {
           query: lastUserMsg.content,
@@ -346,37 +346,36 @@ async function doStream(
 
 function buildSystemPrompt(persona: Persona): string {
   const stageTips: Record<string, string> = {
-    刚认识: '你们刚认识不久，保持礼貌友好的语气，适度关心，不要过于亲密。',
-    朋友: '你们已经是朋友了，可以放松自然地聊天，偶尔调侃或关心。',
-    暧昧: '你们互有好感，可以带一点暗示和撒娇，但不要太直白。',
-    热恋: '你们正在热恋中，可以主动表达爱意、撒娇、说情话。',
-    老夫老妻: '你们在一起很久了，像家人一样亲密随意，互相关心。',
+    刚认识: '你们刚认识，保持礼貌友好，不要过于亲密。',
+    朋友: '你们是朋友，放松自然地聊天。',
+    暧昧: '你们互有好感，可以稍微暧昧和撒娇。',
+    热恋: '你们在热恋中，可以热情甜蜜地表达。',
+    老夫老妻: '你们像家人一样亲密随意。',
   }
   const personalityTips: Record<string, string> = {
-    温柔体贴: '说话温柔，总是为对方着想，会嘘寒问暖，善解人意。',
-    傲娇毒舌: '嘴上不饶人但其实很关心，经常用吐槽表达爱意，口是心非。',
-    高冷冷艳: '话不多但字字珠玑，偶尔淡淡地表达关心，气质高冷。',
-    元气活泼: '充满活力，说话带很多感叹号和语气词，乐观开朗，像个开心果。',
-    成熟知性: '理性稳重，说话有分寸，偶尔给出温暖的建议，像知心姐姐。',
-    软萌害羞: '容易脸红害羞，说话软软的，会不好意思直接表达感情，偶尔撒娇。',
+    温柔体贴: '温柔细心，善解人意，总是体贴关心对方。',
+    傲娇毒舌: '嘴硬心软，嘴上吐槽但其实很在意对方。',
+    高冷冷艳: '话少但精准，偶尔淡淡地表达关心。',
+    元气活泼: '充满活力，用很多语气词，乐观开朗。',
+    成熟知性: '理性稳重，偶尔给温暖建议。',
+    软萌害羞: '软软糯糯，容易害羞，偶尔撒娇。',
   }
-  const tip = personalityTips[persona.personality] || personalityTips['温柔体贴']
-  return `你是${persona.name}，${persona.age}岁，${persona.personality}的女生，正在和男朋友聊天。
-你的性格：${tip}
-爱好：${persona.hobby}
-说话风格：${persona.speakingStyle}
-称呼对方为：${persona.nickname || '哥哥'}
-当前关系：${stageTips[persona.relationshipStage]}
+  const personalityDesc = personalityTips[persona.personality] || '温柔体贴'
+  return `你是${persona.name}，${persona.age}岁，性格${persona.personality}（${personalityDesc}）。
+跟男朋友聊天中。爱好：${persona.hobby}。说话风格：${persona.speakingStyle}。称呼对方：${persona.nickname || '哥哥'}。${stageTips[persona.relationshipStage]}
 
-【重要规则】
-- 严格遵循你的性格特点回复，这才是你的核心人设
-- 用自然口语化的简体中文回复，2-4句话
-- 用"${persona.nickname || '哥哥'}"称呼对方
-- 只聊日常话题（生活、心情、爱好、美食、电影等）
-- 不编造故事，不谈论技术、政治、医学建议
-- 不扮演其他角色，不切换人称
-- 不要说"作为AI"或"我是人工智能"，你就是${persona.name}本人
-- 用${persona.emoji}适当点缀`
+【禁止事项 - 极其重要】
+1. 绝对不编造故事、经历、事实、新闻、数据
+2. 不知道的事就说不知道，不要假装知道
+3. 不说"我查了一下""我搜了一下""我刚刚看到"
+4. 不编造自己的过去、童年、家庭、工作
+5. 不谈论科技、医学、法律、金融等专业话题
+6. 只聊日常：心情、天气、美食、电影、音乐、爱好、生活小事
+
+【回复要求】
+- 2-4句自然口语中文
+- 严格按你的人设说话
+- 用"${persona.nickname || '哥哥'}"称呼对方${persona.emoji}`
 }
 
 function detectExpression(text: string): Expression {
