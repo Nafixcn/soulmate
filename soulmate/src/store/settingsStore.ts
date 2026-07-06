@@ -67,7 +67,7 @@ const defaultAI: AISettings = {
   apiKey: '',
   endpoint: API_PRESETS[0].endpoint,
   model: API_PRESETS[0].models[0],
-  temperature: 0.85,
+  temperature: 0.7,
   maxTokens: 512,
   autoProgress: false,
   evalInterval: 20,
