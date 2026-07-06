@@ -22,6 +22,7 @@ interface ChatStore {
   userMsgCount: number
   hasMore: boolean
   isLoadingMore: boolean
+  isSearching: boolean
 
   setExpression: (expr: Expression) => void
   sendMessage: (content: string, persona: Persona, aiSettings: AISettings, ttsSettings: TTSSettings) => Promise<void>
@@ -64,6 +65,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   userMsgCount: 0,
   hasMore: false,
   isLoadingMore: false,
+  isSearching: false,
 
   setExpression: (expression) => set({ expression }),
   clearError: () => set({ error: null }),
