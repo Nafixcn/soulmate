@@ -104,6 +104,7 @@ const defaultTheme: ThemeColors = {
   aiBubble: '#ffffff',
   text: '#4a3040',
   subText: '#998893',
+  petals: ['🌸', '💮', '🌷', '🏵️', '✿', '❀', '🌸', '💮'],
 }
 
 export const useSettingsStore = create<SettingsStore>((set, get) => ({

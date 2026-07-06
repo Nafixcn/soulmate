@@ -47,6 +47,7 @@ export interface ThemeColors {
   aiBubble: string
   text: string
   subText: string
+  petals: string[]
 }
 
 export const THEME_PRESETS: { name: string; colors: ThemeColors }[] = [
@@ -60,6 +61,7 @@ export const THEME_PRESETS: { name: string; colors: ThemeColors }[] = [
       aiBubble: '#ffffff',
       text: '#4a3040',
       subText: '#998893',
+      petals: ['🌸', '💮', '🌷', '🏵️', '✿', '❀', '🌸', '💮'],
     },
   },
   {
@@ -72,6 +74,7 @@ export const THEME_PRESETS: { name: string; colors: ThemeColors }[] = [
       aiBubble: '#ffffff',
       text: '#2a3a4a',
       subText: '#7a8a9a',
+      petals: ['🪻', '💠', '🦋', '❄️', '🔹', '🪻', '💙', '🌊'],
     },
   },
   {
@@ -84,6 +87,7 @@ export const THEME_PRESETS: { name: string; colors: ThemeColors }[] = [
       aiBubble: '#ffffff',
       text: '#2a3a30',
       subText: '#7a8a80',
+      petals: ['🍀', '🌿', '🍃', '🌱', '🪴', '🍀', '🪷', '☘️'],
     },
   },
   {
@@ -96,6 +100,7 @@ export const THEME_PRESETS: { name: string; colors: ThemeColors }[] = [
       aiBubble: '#ffffff',
       text: '#3a2a4a',
       subText: '#8a7a9a',
+      petals: ['💜', '🪻', '💐', '🌌', '✨', '💫', '🪻', '💜'],
     },
   },
   {
@@ -108,6 +113,7 @@ export const THEME_PRESETS: { name: string; colors: ThemeColors }[] = [
       aiBubble: '#ffffff',
       text: '#4a3020',
       subText: '#9a8078',
+      petals: ['🍂', '🍁', '🌻', '🧡', '🌾', '🍂', '🌼', '🏵️'],
     },
   },
   {
@@ -120,6 +126,7 @@ export const THEME_PRESETS: { name: string; colors: ThemeColors }[] = [
       aiBubble: '#2a2228',
       text: '#e8d8e0',
       subText: '#a09098',
+      petals: ['🌙', '⭐', '✨', '💫', '🌠', '🕯️', '🌙', '💜'],
     },
   },
   {
@@ -132,6 +139,7 @@ export const THEME_PRESETS: { name: string; colors: ThemeColors }[] = [
       aiBubble: '#ffffff',
       text: '#4a3040',
       subText: '#998893',
+      petals: ['🌸', '💮', '🌷', '🏵️', '✿', '❀', '🌸', '💮'],
     },
   },
 ]

@@ -13,7 +13,6 @@ import { SettingsPanel } from './SettingsPanel'
 import { SearchPanel } from './SearchPanel'
 import { AlertTriangle, Search, Download } from 'lucide-react'
 
-const PETALS = ['🌸', '💮', '🏵️', '🌺', '✿', '❀', '🌸', '💮']
 const petalCount = 12
 
 const GREETINGS = [
@@ -110,7 +109,7 @@ export const ChatWindow: React.FC = () => {
   const isLoadingMore = useChatStore((s) => s.isLoadingMore)
   const deleteFrom = useChatStore((s) => s.deleteFrom)
   const regenerate = useChatStore((s) => s.regenerate)
-  const { aiSettings, ttsSettings, persona, personas, activePersonaIndex, setPersona, switchPersona } =
+  const { aiSettings, ttsSettings, persona, personas, activePersonaIndex, setPersona, switchPersona, theme } =
     useSettingsStore()
 
   const [showEditor, setShowEditor] = useState(false)
@@ -125,7 +124,7 @@ export const ChatWindow: React.FC = () => {
       delay: Math.random() * 12,
       duration: 8 + Math.random() * 10,
       size: 14 + Math.random() * 14,
-      emoji: PETALS[Math.floor(Math.random() * PETALS.length)],
+      emoji: theme.petals[Math.floor(Math.random() * theme.petals.length)],
     })),
   )
   const bottomRef = useRef<HTMLDivElement>(null)
