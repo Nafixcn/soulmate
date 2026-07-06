@@ -54,10 +54,12 @@ pub async fn search_web(
         .into_iter()
         .map(|page| {
             let clean_snippet = strip_html(&page.snippet);
+            let title = page.title;
+            let url = format!("https://zh.wikipedia.org/wiki/{}", title);
             SearchResult {
-                title: page.title,
+                title,
                 snippet: clean_snippet.chars().take(300).collect(),
-                url: format!("https://zh.wikipedia.org/wiki/{}", page.title),
+                url,
             }
         })
         .collect();
