@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { AISettings, TTSSettings, Persona, API_PRESETS, DEFAULT_PERSONA } from '../types'
+import { AISettings, TTSSettings, Persona, API_PRESETS, DEFAULT_PERSONA, ThemeColors, THEME_PRESETS } from '../types'
 import { load } from '@tauri-apps/plugin-store'
 
 const STORE_PATH = 'soulmate-settings.json'
@@ -44,11 +44,15 @@ interface SettingsStore {
   personas: Persona[]
   activePersonaIndex: number
   aiConfigured: boolean
+  theme: ThemeColors
+  themePresetIndex: number
 
   setAISettings: (s: Partial<AISettings>) => void
   setTTSSettings: (s: Partial<TTSSettings>) => void
   setPersona: (p: Persona) => void
   applyPreset: (index: number) => void
+  applyThemePreset: (index: number) => void
+  setTheme: (colors: ThemeColors) => void
   loadFromStorage: () => Promise<void>
   saveToStorage: () => void
   addPersona: (p: Persona) => void
@@ -82,13 +86,24 @@ let saveTimer: ReturnType<typeof setTimeout> | null = null
 function debouncedSave() {
   if (saveTimer) clearTimeout(saveTimer)
   saveTimer = setTimeout(() => {
-    const { aiSettings, ttsSettings, persona, personas, activePersonaIndex } = useSettingsStore.getState()
+    const { aiSettings, ttsSettings, persona, personas, activePersonaIndex, theme, themePresetIndex } =
+      useSettingsStore.getState()
     localStorage.setItem(
       STORAGE_KEY,
-      JSON.stringify({ aiSettings, ttsSettings, persona, personas, activePersonaIndex }),
+      JSON.stringify({ aiSettings, ttsSettings, persona, personas, activePersonaIndex, theme, themePresetIndex }),
     )
     saveTimer = null
   }, 300)
+}
+
+const defaultTheme: ThemeColors = {
+  primary: '#e896b0',
+  bg: '#faf5f7',
+  chatBg: '#fef5f8',
+  userBubble: '#f0a8c0',
+  aiBubble: '#ffffff',
+  text: '#4a3040',
+  subText: '#998893',
 }
 
 export const useSettingsStore = create<SettingsStore>((set, get) => ({
@@ -98,6 +113,8 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
   personas: [{ ...DEFAULT_PERSONA }],
   activePersonaIndex: 0,
   aiConfigured: false,
+  theme: { ...defaultTheme },
+  themePresetIndex: 0,
 
   setAISettings: (partial) => {
     const current = get().aiSettings
@@ -133,6 +150,16 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
         model: preset.models[0] || s.aiSettings.model,
       },
     }))
+    debouncedSave()
+  },
+  applyThemePreset: (index) => {
+    const preset = THEME_PRESETS[index]
+    if (!preset) return
+    set({ theme: { ...preset.colors }, themePresetIndex: index })
+    debouncedSave()
+  },
+  setTheme: (colors) => {
+    set({ theme: { ...colors }, themePresetIndex: THEME_PRESETS.length - 1 })
     debouncedSave()
   },
   addPersona: (p) => {
@@ -191,6 +218,8 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
           personas: loadedPersonas.map((p: Persona) => ({ ...DEFAULT_PERSONA, ...p })),
           activePersonaIndex: Math.min(activeIdx, loadedPersonas.length - 1),
           aiConfigured: !!data.aiSettings?.apiKey,
+          theme: data.theme ? { ...defaultTheme, ...data.theme } : { ...defaultTheme },
+          themePresetIndex: data.themePresetIndex ?? 0,
         })
       }
     } catch (e) {
@@ -212,10 +241,10 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     }
   },
   saveToStorage: () => {
-    const { aiSettings, ttsSettings, persona, personas, activePersonaIndex } = get()
+    const { aiSettings, ttsSettings, persona, personas, activePersonaIndex, theme, themePresetIndex } = get()
     localStorage.setItem(
       STORAGE_KEY,
-      JSON.stringify({ aiSettings, ttsSettings, persona, personas, activePersonaIndex }),
+      JSON.stringify({ aiSettings, ttsSettings, persona, personas, activePersonaIndex, theme, themePresetIndex }),
     )
   },
 }))

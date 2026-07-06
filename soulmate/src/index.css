@@ -21,6 +21,8 @@ body,
   --sub: #998893;
   --radius: 18px;
   --shadow: 0 2px 16px rgba(0, 0, 0, 0.06);
+  --chat-bg-start: #fef5f8;
+  --primary: #e896b0;
 }
 
 /* ─── Window ─── */
@@ -28,7 +30,7 @@ body,
   display: flex;
   flex-direction: row;
   height: 100%;
-  background: linear-gradient(180deg, #fef5f8 0%, #fdf0f4 40%, #faf0f5 100%);
+  background: linear-gradient(180deg, var(--chat-bg-start) 0%, var(--bg) 40%, var(--bg) 100%);
   box-shadow: 0 0 60px rgba(240, 168, 192, 0.15);
   position: relative;
   overflow: hidden;
@@ -82,7 +84,7 @@ body,
   align-items: center;
   gap: 8px;
   padding: 16px 10px;
-  background: linear-gradient(180deg, #e896b0, #f0a8c0, #e896b0);
+  background: linear-gradient(180deg, var(--primary), var(--header-bg), var(--primary));
   color: #fff;
   flex-shrink: 0;
   position: relative;
@@ -434,7 +436,7 @@ body,
   border: 1px solid rgba(240, 168, 192, 0.1);
 }
 .user-bubble {
-  background: linear-gradient(135deg, #f0a8c0, #e896b0);
+  background: linear-gradient(135deg, var(--user-bg), var(--primary));
   color: #fff;
   border-bottom-right-radius: 6px;
   box-shadow: 0 2px 12px rgba(240, 168, 192, 0.3);

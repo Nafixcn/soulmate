@@ -39,6 +39,103 @@ export interface TTSSettings {
   voiceURI: string
 }
 
+export interface ThemeColors {
+  primary: string
+  bg: string
+  chatBg: string
+  userBubble: string
+  aiBubble: string
+  text: string
+  subText: string
+}
+
+export const THEME_PRESETS: { name: string; colors: ThemeColors }[] = [
+  {
+    name: '樱花粉',
+    colors: {
+      primary: '#e896b0',
+      bg: '#faf5f7',
+      chatBg: '#fef5f8',
+      userBubble: '#f0a8c0',
+      aiBubble: '#ffffff',
+      text: '#4a3040',
+      subText: '#998893',
+    },
+  },
+  {
+    name: '天空蓝',
+    colors: {
+      primary: '#6baed6',
+      bg: '#f0f5fa',
+      chatBg: '#f5f8fc',
+      userBubble: '#6baed6',
+      aiBubble: '#ffffff',
+      text: '#2a3a4a',
+      subText: '#7a8a9a',
+    },
+  },
+  {
+    name: '薄荷绿',
+    colors: {
+      primary: '#5dae7e',
+      bg: '#f2f8f3',
+      chatBg: '#f6faf7',
+      userBubble: '#5dae7e',
+      aiBubble: '#ffffff',
+      text: '#2a3a30',
+      subText: '#7a8a80',
+    },
+  },
+  {
+    name: '薰衣草',
+    colors: {
+      primary: '#b07cd8',
+      bg: '#f5f2fa',
+      chatBg: '#faf7fc',
+      userBubble: '#b07cd8',
+      aiBubble: '#ffffff',
+      text: '#3a2a4a',
+      subText: '#8a7a9a',
+    },
+  },
+  {
+    name: '暖橘',
+    colors: {
+      primary: '#e8965a',
+      bg: '#faf5f0',
+      chatBg: '#fcf8f5',
+      userBubble: '#e8965a',
+      aiBubble: '#ffffff',
+      text: '#4a3020',
+      subText: '#9a8078',
+    },
+  },
+  {
+    name: '暗夜',
+    colors: {
+      primary: '#4a3040',
+      bg: '#1a1418',
+      chatBg: '#221a1e',
+      userBubble: '#4a3040',
+      aiBubble: '#2a2228',
+      text: '#e8d8e0',
+      subText: '#a09098',
+    },
+  },
+  {
+    name: '自定义',
+    colors: {
+      primary: '#e896b0',
+      bg: '#faf5f7',
+      chatBg: '#fef5f8',
+      userBubble: '#f0a8c0',
+      aiBubble: '#ffffff',
+      text: '#4a3040',
+      subText: '#998893',
+    },
+  },
+]
+
 export const API_PRESETS: { name: string; endpoint: string; models: string[] }[] = [
   {
     name: 'DeepSeek',

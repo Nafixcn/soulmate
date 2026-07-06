@@ -1,16 +1,26 @@
 import React, { useEffect } from 'react'
 import { useSettingsStore } from '../store/settingsStore'
-import { API_PRESETS } from '../types'
+import { API_PRESETS, THEME_PRESETS } from '../types'
 import { getVoices } from '../services/ttsService'
-import { X, Bot, Volume2, Info } from 'lucide-react'
+import { X, Bot, Volume2, Info, Palette } from 'lucide-react'
 
 interface Props {
   onClose: () => void
 }
 
 export const SettingsPanel: React.FC<Props> = ({ onClose }) => {
-  const { aiSettings, ttsSettings, setAISettings, setTTSSettings, applyPreset } = useSettingsStore()
-  const [tab, setTab] = React.useState<'ai' | 'tts' | 'about'>('ai')
+  const {
+    aiSettings,
+    ttsSettings,
+    setAISettings,
+    setTTSSettings,
+    applyPreset,
+    theme,
+    themePresetIndex,
+    applyThemePreset,
+    setTheme,
+  } = useSettingsStore()
+  const [tab, setTab] = React.useState<'ai' | 'tts' | 'theme' | 'about'>('ai')
   const [voices, setVoices] = React.useState<SpeechSynthesisVoice[]>([])
   const presetIndex = API_PRESETS.findIndex((p) => p.endpoint === aiSettings.endpoint)
   const isCustom = presetIndex < 0 || presetIndex >= API_PRESETS.length - 1
@@ -40,6 +50,9 @@ export const SettingsPanel: React.FC<Props> = ({ onClose }) => {
           </button>
           <button className={`tab-btn ${tab === 'tts' ? 'active' : ''}`} onClick={() => setTab('tts')}>
             <Volume2 size={14} /> 语音
+          </button>
+          <button className={`tab-btn ${tab === 'theme' ? 'active' : ''}`} onClick={() => setTab('theme')}>
+            <Palette size={14} /> 主题
           </button>
           <button className={`tab-btn ${tab === 'about' ? 'active' : ''}`} onClick={() => setTab('about')}>
             <Info size={14} /> 关于
@@ -209,6 +222,82 @@ export const SettingsPanel: React.FC<Props> = ({ onClose }) => {
                   ))}
                 </select>
               </div>
+            </div>
+          )}
+          {tab === 'theme' && (
+            <div className="settings-section">
+              <div className="form-group">
+                <label>预设主题</label>
+                <select
+                  value={themePresetIndex}
+                  onChange={(e) => {
+                    const i = parseInt(e.target.value)
+                    applyThemePreset(i)
+                  }}
+                >
+                  {THEME_PRESETS.map((p, i) => (
+                    <option key={i} value={i}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {themePresetIndex === THEME_PRESETS.length - 1 && (
+                <>
+                  <div className="form-group">
+                    <label>主色调</label>
+                    <input
+                      type="color"
+                      value={theme.primary}
+                      onChange={(e) => setTheme({ ...theme, primary: e.target.value })}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>背景色</label>
+                    <input type="color" value={theme.bg} onChange={(e) => setTheme({ ...theme, bg: e.target.value })} />
+                  </div>
+                  <div className="form-group">
+                    <label>聊天区背景</label>
+                    <input
+                      type="color"
+                      value={theme.chatBg}
+                      onChange={(e) => setTheme({ ...theme, chatBg: e.target.value })}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>用户气泡</label>
+                    <input
+                      type="color"
+                      value={theme.userBubble}
+                      onChange={(e) => setTheme({ ...theme, userBubble: e.target.value })}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>AI 气泡</label>
+                    <input
+                      type="color"
+                      value={theme.aiBubble}
+                      onChange={(e) => setTheme({ ...theme, aiBubble: e.target.value })}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>文字色</label>
+                    <input
+                      type="color"
+                      value={theme.text}
+                      onChange={(e) => setTheme({ ...theme, text: e.target.value })}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>副文字色</label>
+                    <input
+                      type="color"
+                      value={theme.subText}
+                      onChange={(e) => setTheme({ ...theme, subText: e.target.value })}
+                    />
+                  </div>
+                </>
+              )}
             </div>
           )}
           {tab === 'about' && (
