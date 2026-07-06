@@ -25,8 +25,8 @@ export const PersonaEditor: React.FC<Props> = ({ persona, onChange, onClose }) =
   const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    if (file.size > 500 * 1024) {
-      alert('图片不能超过500KB')
+    if (file.size > 300 * 1024) {
+      alert('图片不能超过300KB')
       return
     }
     const reader = new FileReader()
@@ -34,16 +34,17 @@ export const PersonaEditor: React.FC<Props> = ({ persona, onChange, onClose }) =
       const img = new Image()
       img.onload = () => {
         const canvas = document.createElement('canvas')
-        const maxSize = 200
-        let w = img.width
-        let h = img.height
-        if (w > h) { if (w > maxSize) { h *= maxSize / w; w = maxSize } }
-        else { if (h > maxSize) { w *= maxSize / h; h = maxSize } }
-        canvas.width = w
-        canvas.height = h
+        const size = 150
+        canvas.width = size
+        canvas.height = size
         const ctx = canvas.getContext('2d')
-        ctx?.drawImage(img, 0, 0, w, h)
-        update('avatar', canvas.toDataURL('image/jpeg', 0.7))
+        if (ctx) {
+          const minDim = Math.min(img.width, img.height)
+          const sx = (img.width - minDim) / 2
+          const sy = (img.height - minDim) / 2
+          ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, size, size)
+          update('avatar', canvas.toDataURL('image/jpeg', 0.6))
+        }
       }
       img.src = reader.result as string
     }
