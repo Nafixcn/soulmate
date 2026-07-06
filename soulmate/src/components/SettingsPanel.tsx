@@ -244,58 +244,39 @@ export const SettingsPanel: React.FC<Props> = ({ onClose }) => {
               </div>
               {themePresetIndex === THEME_PRESETS.length - 1 && (
                 <>
-                  <div className="form-group">
-                    <label>主色调</label>
-                    <input
-                      type="color"
-                      value={theme.primary}
-                      onChange={(e) => setTheme({ ...theme, primary: e.target.value })}
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>背景色</label>
-                    <input type="color" value={theme.bg} onChange={(e) => setTheme({ ...theme, bg: e.target.value })} />
-                  </div>
-                  <div className="form-group">
-                    <label>聊天区背景</label>
-                    <input
-                      type="color"
-                      value={theme.chatBg}
-                      onChange={(e) => setTheme({ ...theme, chatBg: e.target.value })}
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>用户气泡</label>
-                    <input
-                      type="color"
-                      value={theme.userBubble}
-                      onChange={(e) => setTheme({ ...theme, userBubble: e.target.value })}
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>AI 气泡</label>
-                    <input
-                      type="color"
-                      value={theme.aiBubble}
-                      onChange={(e) => setTheme({ ...theme, aiBubble: e.target.value })}
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>文字色</label>
-                    <input
-                      type="color"
-                      value={theme.text}
-                      onChange={(e) => setTheme({ ...theme, text: e.target.value })}
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>副文字色</label>
-                    <input
-                      type="color"
-                      value={theme.subText}
-                      onChange={(e) => setTheme({ ...theme, subText: e.target.value })}
-                    />
-                  </div>
+                  {(
+                    [
+                      ['主色调', 'primary'],
+                      ['背景色', 'bg'],
+                      ['聊天区背景', 'chatBg'],
+                      ['用户气泡', 'userBubble'],
+                      ['AI 气泡', 'aiBubble'],
+                      ['文字色', 'text'],
+                      ['副文字色', 'subText'],
+                    ] as const
+                  ).map(([label, key]) => (
+                    <div className="form-group" key={key}>
+                      <label>{label}</label>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div
+                          style={{
+                            width: 28,
+                            height: 28,
+                            borderRadius: 6,
+                            background: theme[key],
+                            border: '2px solid rgba(0,0,0,0.15)',
+                            flexShrink: 0,
+                          }}
+                        />
+                        <input
+                          value={theme[key]}
+                          onChange={(e) => setTheme({ ...theme, [key]: e.target.value })}
+                          placeholder="#e896b0"
+                          style={{ flex: 1 }}
+                        />
+                      </div>
+                    </div>
+                  ))}
                 </>
               )}
             </div>
