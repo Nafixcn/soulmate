@@ -1,5 +1,5 @@
 use crate::AppState;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Clone)]
 pub struct SearchResult {
@@ -8,91 +8,77 @@ pub struct SearchResult {
     pub url: String,
 }
 
+#[derive(Debug, Deserialize)]
+struct WikiResponse {
+    query: WikiQuery,
+}
+
+#[derive(Debug, Deserialize)]
+struct WikiQuery {
+    search: Vec<WikiPage>,
+}
+
+#[derive(Debug, Deserialize)]
+struct WikiPage {
+    title: String,
+    snippet: String,
+    pageid: u64,
+}
+
 #[tauri::command]
 pub async fn search_web(
     state: tauri::State<'_, AppState>,
     query: String,
 ) -> Result<Vec<SearchResult>, String> {
     let client = &state.http_client;
-    let url = format!(
-        "https://html.duckduckgo.com/html/?q={}",
+
+    let wiki_url = format!(
+        "https://zh.wikipedia.org/w/api.php?action=query&list=search&srsearch={}&format=json&srlimit=5&srprop=snippet",
         urlencoding::encode(&query)
     );
 
     let resp = client
-        .get(&url)
-        .header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        .get(&wiki_url)
+        .header("User-Agent", "SoulMate/2.0 (Desktop App)")
         .send()
         .await
         .map_err(|e| format!("搜索请求失败: {}", e))?;
 
-    let html = resp.text().await.map_err(|e| e.to_string())?;
+    let text = resp.text().await.map_err(|e| e.to_string())?;
 
-    parse_ddg_html(&html)
-}
+    let data: WikiResponse = serde_json::from_str(&text).map_err(|e| format!("解析失败: {}", e))?;
 
-fn parse_ddg_html(html: &str) -> Result<Vec<SearchResult>, String> {
-    let mut results = Vec::new();
-
-    let chunks: Vec<&str> = html.split("result__body").collect();
-    if chunks.len() < 2 {
-        return Ok(results);
-    }
-
-    for chunk in chunks.iter().skip(1) {
-        if results.len() >= 5 {
-            break;
-        }
-
-        let title = extract_between(chunk, "result__a", "</a>")
-            .unwrap_or_default()
-            .split('>')
-            .last()
-            .unwrap_or("")
-            .trim()
-            .to_string();
-
-        let url = extract_between(chunk, "result__url", "</a>")
-            .unwrap_or_default()
-            .split('>')
-            .last()
-            .unwrap_or("")
-            .trim()
-            .to_string();
-
-        let snippet = extract_between(chunk, "result__snippet", "</a>")
-            .unwrap_or_else(|| {
-                extract_between(chunk, "</span>", "</div>").unwrap_or("")
-            })
-            .split('>')
-            .last()
-            .unwrap_or("")
-            .trim()
-            .to_string();
-
-        if !title.is_empty() && title.len() < 200 {
-            let clean_url = if url.starts_with("http") {
-                url.to_string()
-            } else {
-                String::new()
-            };
-            results.push(SearchResult {
-                title,
-                snippet: snippet.chars().take(300).collect(),
-                url: clean_url,
-            });
-        }
-    }
+    let results: Vec<SearchResult> = data
+        .query
+        .search
+        .into_iter()
+        .map(|page| {
+            let clean_snippet = strip_html(&page.snippet);
+            SearchResult {
+                title: page.title,
+                snippet: clean_snippet.chars().take(300).collect(),
+                url: format!("https://zh.wikipedia.org/wiki/{}", page.title),
+            }
+        })
+        .collect();
 
     if results.is_empty() {
-        Err("未找到搜索结果".into())
+        Err("未找到相关结果".into())
     } else {
         Ok(results)
     }
 }
 
-fn extract_between<'a>(source: &'a str, start: &str, end: &str) -> Option<&'a str> {
-    let start_idx = source.find(start)? + start.len();
-    let end_idx = source[start_idx..].find(end)? + start_idx;
-    Some(&source[start_idx..end_idx])
+fn strip_html(s: &str) -> String {
+    let mut result = String::new();
+    let mut in_tag = false;
+    for c in s.chars() {
+        match c {
+            '<' => in_tag = true,
+            '>' => in_tag = false,
+            _ if !in_tag => result.push(c),
+            _ => {}
+        }
+    }
+    result
 }
