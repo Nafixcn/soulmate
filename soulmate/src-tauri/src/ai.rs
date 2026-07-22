@@ -3,7 +3,7 @@ use serde::Serialize;
 use std::sync::Arc;
 use tauri::ipc::Channel;
 
-use crate::AppState;
+use crate::{credentials, AppState};
 
 #[derive(Debug, Serialize, Clone)]
 pub struct AiChunk {
@@ -17,7 +17,6 @@ pub struct AiChunk {
 pub async fn send_message(
     state: tauri::State<'_, AppState>,
     messages_json: String,
-    api_key: String,
     endpoint: String,
     model: String,
     temperature: Option<f64>,
@@ -26,6 +25,7 @@ pub async fn send_message(
     on_chunk: Channel<AiChunk>,
 ) -> Result<(), String> {
     validate_endpoint(&endpoint)?;
+    let api_key = credentials::load_api_key()?.ok_or_else(|| "请先配置 API Key".to_string())?;
 
     let messages: Vec<serde_json::Value> =
         serde_json::from_str(&messages_json).map_err(|e| e.to_string())?;
@@ -168,12 +168,12 @@ fn parse_stream_line(line: &str) -> Option<AiChunk> {
 #[tauri::command]
 pub async fn evaluate_relationship(
     state: tauri::State<'_, AppState>,
-    api_key: String,
     endpoint: String,
     model: String,
     messages_json: String,
 ) -> Result<String, String> {
     validate_endpoint(&endpoint)?;
+    let api_key = credentials::load_api_key()?.ok_or_else(|| "请先配置 API Key".to_string())?;
 
     let client = &state.http_client;
 

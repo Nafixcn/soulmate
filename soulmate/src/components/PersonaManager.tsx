@@ -7,7 +7,7 @@ interface Props {
   activeIndex: number
   onAdd: (p: Persona) => void
   onUpdate: (index: number, p: Persona) => void
-  onRemove: (index: number) => void
+  onRemove: (index: number) => Promise<boolean>
   onSwitch: (index: number) => void
   onClose: () => void
 }
@@ -27,6 +27,7 @@ export const PersonaManager: React.FC<Props> = ({
 }) => {
   const [editing, setEditing] = useState<number | null>(null)
   const [draft, setDraft] = useState<Persona>({ ...DEFAULT_PERSONA })
+  const [deleting, setDeleting] = useState<number | null>(null)
 
   const startEdit = (index: number) => {
     setEditing(index)
@@ -49,6 +50,13 @@ export const PersonaManager: React.FC<Props> = ({
 
   const update = <K extends keyof Persona>(key: K, value: Persona[K]) => {
     setDraft((prev) => ({ ...prev, [key]: value }))
+  }
+
+  const removePersona = async (index: number) => {
+    if (!window.confirm(`删除“${personas[index].name}”及其全部聊天记录？`)) return
+    setDeleting(index)
+    await onRemove(index)
+    setDeleting(null)
   }
 
   if (editing !== null) {
@@ -194,7 +202,12 @@ export const PersonaManager: React.FC<Props> = ({
                   <Edit2 size={14} />
                 </button>
                 {personas.length > 1 && (
-                  <button className="persona-action-btn danger" onClick={() => onRemove(i)}>
+                  <button
+                    className="persona-action-btn danger"
+                    onClick={() => void removePersona(i)}
+                    disabled={deleting !== null}
+                    title="删除角色及聊天记录"
+                  >
                     <Trash2 size={14} />
                   </button>
                 )}

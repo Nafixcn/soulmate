@@ -12,7 +12,7 @@ AI 女友桌面陪伴应用 —— 基于 Tauri 2 + React 19 + Rust 构建。
 - **语音输出**：Web Speech API 文字转语音
 - **关系推进**：每 20 条消息 AI 自动评估并推进关系阶段
 - **消息搜索/导出**：全文搜索和 Markdown 导出
-- **消息持久化**：SQLite 存储聊天记录
+- **本地持久化**：SQLite 存储聊天记录、角色和设置
 - **安全配置**：API Key 由操作系统钥匙串存储
 
 ## 技术栈
@@ -46,6 +46,17 @@ npm run tauri dev
 ```bash
 npm run tauri build
 ```
+
+### 质量检查
+
+```bash
+npm run lint
+npm test
+npm run test:e2e
+cd src-tauri && cargo test && cargo clippy --all-targets -- -D warnings
+```
+
+GitHub Actions 会在推送和拉取请求中执行前端、Rust 与 Chromium 端到端检查。
 
 ## 项目结构
 

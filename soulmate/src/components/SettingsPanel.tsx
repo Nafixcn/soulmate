@@ -2,7 +2,7 @@ import React, { useEffect } from 'react'
 import { useSettingsStore } from '../store/settingsStore'
 import { API_PRESETS, THEME_PRESETS } from '../types'
 import { getVoices } from '../services/ttsService'
-import { X, Bot, Volume2, Info, Palette } from 'lucide-react'
+import { X, Bot, Volume2, Info, Palette, KeyRound, Trash2 } from 'lucide-react'
 
 interface Props {
   onClose: () => void
@@ -19,9 +19,13 @@ export const SettingsPanel: React.FC<Props> = ({ onClose }) => {
     themePresetIndex,
     applyThemePreset,
     setTheme,
+    aiConfigured,
+    setApiKey,
   } = useSettingsStore()
   const [tab, setTab] = React.useState<'ai' | 'tts' | 'theme' | 'about'>('ai')
   const [voices, setVoices] = React.useState<SpeechSynthesisVoice[]>([])
+  const [apiKeyDraft, setApiKeyDraft] = React.useState('')
+  const [savingApiKey, setSavingApiKey] = React.useState(false)
   const presetIndex = API_PRESETS.findIndex((p) => p.endpoint === aiSettings.endpoint)
   const isCustom = presetIndex < 0 || presetIndex >= API_PRESETS.length - 1
   const presetModels = isCustom ? [] : API_PRESETS[presetIndex]?.models || []
@@ -34,6 +38,13 @@ export const SettingsPanel: React.FC<Props> = ({ onClose }) => {
       window.speechSynthesis.removeEventListener('voiceschanged', load)
     }
   }, [])
+
+  const persistApiKey = async (apiKey: string) => {
+    setSavingApiKey(true)
+    const saved = await setApiKey(apiKey)
+    if (saved) setApiKeyDraft('')
+    setSavingApiKey(false)
+  }
 
   return (
     <div className="settings-overlay" onClick={onClose}>
@@ -91,12 +102,33 @@ export const SettingsPanel: React.FC<Props> = ({ onClose }) => {
               </div>
               <div className="form-group">
                 <label>API Key</label>
-                <input
-                  type="password"
-                  value={aiSettings.apiKey}
-                  onChange={(e) => setAISettings({ apiKey: e.target.value })}
-                  placeholder="sk-..."
-                />
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input
+                    type="password"
+                    value={apiKeyDraft}
+                    onChange={(e) => setApiKeyDraft(e.target.value)}
+                    placeholder={aiConfigured ? '已安全保存' : 'sk-...'}
+                    style={{ flex: 1 }}
+                  />
+                  <button
+                    className="tag active"
+                    onClick={() => void persistApiKey(apiKeyDraft)}
+                    disabled={savingApiKey || !apiKeyDraft.trim()}
+                    title="保存 API Key"
+                  >
+                    <KeyRound size={14} /> 保存
+                  </button>
+                  {aiConfigured && (
+                    <button
+                      className="tag"
+                      onClick={() => void persistApiKey('')}
+                      disabled={savingApiKey}
+                      title="移除 API Key"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
+                </div>
               </div>
               <div className="form-group">
                 <label>模型</label>

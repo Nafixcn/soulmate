@@ -2,11 +2,15 @@ import { create } from 'zustand'
 import { AISettings, TTSSettings, Persona, API_PRESETS, DEFAULT_PERSONA, ThemeColors, THEME_PRESETS } from '../types'
 import {
   clearLegacyApiKey,
-  loadApiKey,
+  clearLocalSettingsSnapshots,
+  deletePersonaData,
+  hasApiKey,
+  loadLegacyLocalApiKey,
   loadLegacyApiKey,
   loadSettingsSnapshot,
   saveApiKey,
   saveSettingsSnapshot,
+  type SettingsSnapshotInput,
 } from '../services/settingsPersistence'
 import { normalizePersonas } from '../domain/persona'
 
@@ -19,23 +23,25 @@ interface SettingsStore {
   aiConfigured: boolean
   theme: ThemeColors
   themePresetIndex: number
+  persistenceError: string | null
 
-  setAISettings: (s: Partial<AISettings>) => void
-  setTTSSettings: (s: Partial<TTSSettings>) => void
-  setPersona: (p: Persona) => void
+  setAISettings: (settings: Partial<AISettings>) => void
+  setApiKey: (apiKey: string) => Promise<boolean>
+  setTTSSettings: (settings: Partial<TTSSettings>) => void
+  setPersona: (persona: Persona) => void
   applyPreset: (index: number) => void
   applyThemePreset: (index: number) => void
   setTheme: (colors: ThemeColors) => void
   loadFromStorage: () => Promise<void>
-  saveToStorage: () => void
-  addPersona: (p: Persona) => void
-  updatePersona: (index: number, p: Persona) => void
-  removePersona: (index: number) => void
+  saveToStorage: () => Promise<boolean>
+  clearPersistenceError: () => void
+  addPersona: (persona: Persona) => void
+  updatePersona: (index: number, persona: Persona) => void
+  removePersona: (index: number) => Promise<boolean>
   switchPersona: (index: number) => void
 }
 
 const defaultAI: AISettings = {
-  apiKey: '',
   endpoint: API_PRESETS[0].endpoint,
   model: API_PRESETS[0].models[0],
   temperature: 0.6,
@@ -53,18 +59,6 @@ const defaultTTS: TTSSettings = {
   voiceURI: '',
 }
 
-let saveTimer: ReturnType<typeof setTimeout> | null = null
-
-function debouncedSave() {
-  if (saveTimer) clearTimeout(saveTimer)
-  saveTimer = setTimeout(() => {
-    const { aiSettings, ttsSettings, persona, personas, activePersonaIndex, theme, themePresetIndex } =
-      useSettingsStore.getState()
-    saveSettingsSnapshot({ aiSettings, ttsSettings, persona, personas, activePersonaIndex, theme, themePresetIndex })
-    saveTimer = null
-  }, 300)
-}
-
 const defaultTheme: ThemeColors = {
   primary: '#e896b0',
   bg: '#faf5f7',
@@ -76,6 +70,28 @@ const defaultTheme: ThemeColors = {
   petals: ['🌸', '💮', '🌷', '🏵️', '✿', '❀', '🌸', '💮'],
 }
 
+let saveTimer: ReturnType<typeof setTimeout> | null = null
+
+function snapshotFromState(state: SettingsStore): SettingsSnapshotInput {
+  return {
+    aiSettings: state.aiSettings,
+    ttsSettings: state.ttsSettings,
+    persona: state.persona,
+    personas: state.personas,
+    activePersonaIndex: state.activePersonaIndex,
+    theme: state.theme,
+    themePresetIndex: state.themePresetIndex,
+  }
+}
+
+function debouncedSave() {
+  if (saveTimer) clearTimeout(saveTimer)
+  saveTimer = setTimeout(() => {
+    saveTimer = null
+    void useSettingsStore.getState().saveToStorage()
+  }, 300)
+}
+
 export const useSettingsStore = create<SettingsStore>((set, get) => ({
   aiSettings: defaultAI,
   ttsSettings: defaultTTS,
@@ -85,39 +101,42 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
   aiConfigured: false,
   theme: { ...defaultTheme },
   themePresetIndex: 0,
+  persistenceError: null,
 
   setAISettings: (partial) => {
-    const current = get().aiSettings
-    const merged = { ...current, ...partial }
-    const hasKey = !!merged.apiKey
-    set({ aiSettings: merged, aiConfigured: hasKey })
-    if (partial.apiKey !== undefined) {
-      void saveApiKey(merged.apiKey)
-    }
+    set((state) => ({ aiSettings: { ...state.aiSettings, ...partial } }))
     debouncedSave()
   },
+  setApiKey: async (apiKey) => {
+    const saved = await saveApiKey(apiKey.trim())
+    if (saved) {
+      set({ aiConfigured: apiKey.trim().length > 0, persistenceError: null })
+    } else {
+      set({ persistenceError: 'API Key 无法写入系统钥匙串' })
+    }
+    return saved
+  },
   setTTSSettings: (partial) => {
-    set((s) => ({ ttsSettings: { ...s.ttsSettings, ...partial } }))
+    set((state) => ({ ttsSettings: { ...state.ttsSettings, ...partial } }))
     debouncedSave()
   },
   setPersona: (persona) => {
-    const idx = get().activePersonaIndex
+    const index = get().activePersonaIndex
     const personas = [...get().personas]
-    if (personas[idx]) {
-      const updatedPersona = { ...persona, id: personas[idx].id }
-      personas[idx] = updatedPersona
-      set({ persona: updatedPersona, personas })
-    }
+    if (!personas[index]) return
+    const updatedPersona = { ...persona, id: personas[index].id }
+    personas[index] = updatedPersona
+    set({ persona: updatedPersona, personas })
     debouncedSave()
   },
   applyPreset: (index) => {
     const preset = API_PRESETS[index]
     if (!preset) return
-    set((s) => ({
+    set((state) => ({
       aiSettings: {
-        ...s.aiSettings,
-        endpoint: preset.endpoint || s.aiSettings.endpoint,
-        model: preset.models[0] || s.aiSettings.model,
+        ...state.aiSettings,
+        endpoint: preset.endpoint || state.aiSettings.endpoint,
+        model: preset.models[0] || state.aiSettings.model,
       },
     }))
     debouncedSave()
@@ -132,31 +151,44 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     set({ theme: { ...colors }, themePresetIndex: THEME_PRESETS.length - 1 })
     debouncedSave()
   },
-  addPersona: (p) => {
+  addPersona: (input) => {
     const existingIds = new Set(get().personas.map((persona) => persona.id))
-    const persona = { ...p, id: p.id && !existingIds.has(p.id) ? p.id : crypto.randomUUID() }
+    const persona = { ...input, id: input.id && !existingIds.has(input.id) ? input.id : crypto.randomUUID() }
     const personas = [...get().personas, persona]
     set({ personas, persona, activePersonaIndex: personas.length - 1 })
     debouncedSave()
   },
-  updatePersona: (index, p) => {
+  updatePersona: (index, input) => {
     const personas = [...get().personas]
     if (!personas[index]) return
-    personas[index] = { ...p, id: personas[index].id }
-    const updates: Partial<{ personas: Persona[]; persona: Persona }> = { personas }
-    if (index === get().activePersonaIndex) updates.persona = p
-    set(updates as { personas: Persona[]; persona: Persona })
+    const persona = { ...input, id: personas[index].id }
+    personas[index] = persona
+    const updates: Partial<SettingsStore> = { personas }
+    if (index === get().activePersonaIndex) updates.persona = persona
+    set(updates)
     debouncedSave()
   },
-  removePersona: (index) => {
-    const personas = get().personas
-    if (personas.length <= 1) return
-    const newPersonas = personas.filter((_, i) => i !== index)
-    let activeIdx = get().activePersonaIndex
-    if (index === activeIdx) activeIdx = 0
-    else if (index < activeIdx) activeIdx--
-    set({ personas: newPersonas, persona: newPersonas[activeIdx], activePersonaIndex: activeIdx })
-    debouncedSave()
+  removePersona: async (index) => {
+    const state = get()
+    if (state.personas.length <= 1 || !state.personas[index]) return false
+
+    const removedPersona = state.personas[index]
+    const personas = state.personas.filter((_, personaIndex) => personaIndex !== index)
+    let activePersonaIndex = state.activePersonaIndex
+    if (index === activePersonaIndex) activePersonaIndex = 0
+    else if (index < activePersonaIndex) activePersonaIndex--
+    const persona = personas[activePersonaIndex]
+    const nextState = { ...state, personas, persona, activePersonaIndex }
+
+    try {
+      await deletePersonaData(removedPersona.id, snapshotFromState(nextState))
+      set({ personas, persona, activePersonaIndex, persistenceError: null })
+      return true
+    } catch (error) {
+      console.error('Failed to delete persona:', error)
+      set({ persistenceError: '角色删除失败，聊天记录未被修改' })
+      return false
+    }
   },
   switchPersona: (index) => {
     const personas = get().personas
@@ -165,65 +197,62 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     debouncedSave()
   },
   loadFromStorage: async () => {
-    let legacyApiKey = ''
-    let shouldPersistNormalizedSettings = false
+    let legacyApiKey = loadLegacyLocalApiKey()
+    let loadedFromLocal = false
+
     try {
-      const data = loadSettingsSnapshot()
-      if (data) {
-        shouldPersistNormalizedSettings = true
-        legacyApiKey = data.aiSettings?.apiKey || ''
+      const loaded = await loadSettingsSnapshot()
+      if (loaded) {
+        loadedFromLocal = loaded.source === 'local'
+        const data = loaded.snapshot
+        const { apiKey, ...storedAISettings } = data.aiSettings || {}
+        legacyApiKey = apiKey || legacyApiKey
         const storedPersonas = data.personas?.length ? data.personas : [data.persona || {}]
-        const { personas: loadedPersonas, activeIndex } = normalizePersonas(
-          storedPersonas,
-          data.activePersonaIndex ?? 0,
-        )
+        const { personas, activeIndex } = normalizePersonas(storedPersonas, data.activePersonaIndex ?? 0)
         set({
-          aiSettings: { ...defaultAI, ...data.aiSettings, apiKey: '' },
+          aiSettings: { ...defaultAI, ...storedAISettings },
           ttsSettings: { ...defaultTTS, ...data.ttsSettings },
-          persona: loadedPersonas[activeIndex],
-          personas: loadedPersonas,
+          persona: personas[activeIndex],
+          personas,
           activePersonaIndex: activeIndex,
-          aiConfigured: false,
           theme: data.theme ? { ...defaultTheme, ...data.theme } : { ...defaultTheme },
           themePresetIndex: data.themePresetIndex ?? 0,
         })
       }
-    } catch (e) {
-      console.warn('load settings:', e)
+    } catch (error) {
+      console.warn('Failed to load settings:', error)
+      set({ persistenceError: '设置加载失败，已使用默认配置' })
     }
 
+    let configured = await hasApiKey()
+    const legacyStoreApiKey = await loadLegacyApiKey()
+    const migrationCandidate = configured ? '' : legacyApiKey || legacyStoreApiKey
+
+    if (migrationCandidate && (await saveApiKey(migrationCandidate))) {
+      configured = true
+      await clearLegacyApiKey()
+    } else if (configured && legacyStoreApiKey) {
+      await clearLegacyApiKey()
+    }
+    set({ aiConfigured: configured })
+
+    if (loadedFromLocal) {
+      const persisted = await get().saveToStorage()
+      if (persisted && (!legacyApiKey || configured)) clearLocalSettingsSnapshots()
+    } else if (configured && legacyApiKey) {
+      clearLocalSettingsSnapshots()
+    }
+  },
+  saveToStorage: async () => {
     try {
-      let storedApiKey = await loadApiKey()
-      const legacyStoreApiKey = await loadLegacyApiKey()
-      let canRemoveLegacyApiKey = !legacyApiKey
-      const migrationCandidate = storedApiKey ? '' : legacyApiKey || legacyStoreApiKey
-
-      if (migrationCandidate && (await saveApiKey(migrationCandidate))) {
-        storedApiKey = migrationCandidate
-        canRemoveLegacyApiKey = true
-        await clearLegacyApiKey()
-      } else if (storedApiKey) {
-        canRemoveLegacyApiKey = true
-        if (legacyStoreApiKey) await clearLegacyApiKey()
-      }
-
-      const apiKey = storedApiKey || migrationCandidate
-      if (apiKey) {
-        const current = get()
-        set({
-          aiSettings: { ...current.aiSettings, apiKey },
-          aiConfigured: true,
-        })
-      }
-      if (shouldPersistNormalizedSettings && canRemoveLegacyApiKey) {
-        get().saveToStorage()
-      }
-    } catch {
-      /* Tauri runtime or system keychain unavailable */
+      await saveSettingsSnapshot(snapshotFromState(get()))
+      set({ persistenceError: null })
+      return true
+    } catch (error) {
+      console.error('Failed to save settings:', error)
+      set({ persistenceError: '设置保存失败，请稍后重试' })
+      return false
     }
   },
-  saveToStorage: () => {
-    const { aiSettings, ttsSettings, persona, personas, activePersonaIndex, theme, themePresetIndex } = get()
-    saveSettingsSnapshot({ aiSettings, ttsSettings, persona, personas, activePersonaIndex, theme, themePresetIndex })
-  },
+  clearPersistenceError: () => set({ persistenceError: null }),
 }))

@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { Message, Expression, AISettings, TTSSettings, AiChunk, Persona } from '../types'
+import { Message, Expression, AISettings, TTSSettings, AiChunk, Persona, MessagePage } from '../types'
 import { Channel, invoke } from '@tauri-apps/api/core'
 import { speak, stopSpeaking } from '../services/ttsService'
 import { prepareConversation } from '../services/conversationService'
@@ -30,9 +30,10 @@ interface ChatStore {
   sendMessage: (content: string, persona: Persona, aiSettings: AISettings, ttsSettings: TTSSettings) => Promise<void>
   loadMessages: (personaId: string) => Promise<void>
   loadEarlierMessages: () => Promise<void>
-  clearChat: () => Promise<void>
+  revealMessage: (messageId: string) => Promise<boolean>
+  clearChat: () => Promise<boolean>
   clearError: () => void
-  deleteFrom: (fromMessageId: string) => Promise<void>
+  deleteFrom: (fromMessageId: string) => Promise<boolean>
   regenerate: (
     persona: Persona,
     aiSettings: AISettings,
@@ -91,12 +92,12 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       ...resetCancelState(),
     })
     try {
-      const msgs = await invoke<Message[]>('get_messages', { personaId, limit: PAGE_SIZE })
+      const page = await invoke<MessagePage>('get_messages', { personaId, limit: PAGE_SIZE })
       if (get().activePersonaId !== personaId) return
       set({
-        messages: msgs,
-        hasMore: msgs.length >= PAGE_SIZE,
-        userMsgCount: msgs.filter((message) => message.role === 'user').length,
+        messages: page.messages,
+        hasMore: page.hasMore,
+        userMsgCount: page.userMessageCount,
       })
     } catch (e) {
       console.error('Failed to load messages:', e)
@@ -111,15 +112,14 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     if (isLoadingMore || messages.length === 0) return
     set({ isLoadingMore: true })
     try {
-      const firstTs = messages[0].timestamp
-      const older = await invoke<Message[]>('get_messages', {
+      const page = await invoke<MessagePage>('get_messages', {
         personaId: activePersonaId,
         limit: PAGE_SIZE,
-        before: firstTs,
+        beforeId: messages[0].id,
       })
       if (get().activePersonaId !== activePersonaId) return
-      if (older.length > 0) {
-        set({ messages: [...older, ...messages], hasMore: older.length >= PAGE_SIZE })
+      if (page.messages.length > 0) {
+        set({ messages: [...page.messages, ...messages], hasMore: page.hasMore, userMsgCount: page.userMessageCount })
       } else {
         set({ hasMore: false })
       }
@@ -127,6 +127,28 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       console.error('Failed to load earlier messages:', e)
     } finally {
       set({ isLoadingMore: false })
+    }
+  },
+
+  revealMessage: async (messageId) => {
+    const personaId = get().activePersonaId
+    if (get().messages.some((message) => message.id === messageId)) return true
+    set({ isLoadingConversation: true })
+    try {
+      const page = await invoke<MessagePage>('get_messages_from', { personaId, messageId })
+      if (get().activePersonaId !== personaId || page.messages.length === 0) return false
+      set({
+        messages: page.messages,
+        hasMore: page.hasMore,
+        userMsgCount: page.userMessageCount,
+      })
+      return true
+    } catch (error) {
+      console.error('Failed to reveal message:', error)
+      set({ error: '无法定位该历史消息' })
+      return false
+    } finally {
+      if (get().activePersonaId === personaId) set({ isLoadingConversation: false })
     }
   },
 
@@ -186,6 +208,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       }
       try {
         await doStream(apiMessages, aiSettings, reqId, controller, ttsSettings, persona.id)
+        if (controller.signal.aborted) return
         maybeEvaluateRelation(persona, aiSettings)
         return
       } catch (error: unknown) {
@@ -206,20 +229,27 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     const state = get()
     await cancelCurrent(state)
     try {
-      await invoke('delete_messages_from', { personaId: state.activePersonaId, fromMessageId })
+      const userMsgCount = await invoke<number>('delete_messages_from', {
+        personaId: state.activePersonaId,
+        fromMessageId,
+      })
+      set((current) => {
+        if (current.activePersonaId !== state.activePersonaId) return {}
+        const targetIndex = current.messages.findIndex((message) => message.id === fromMessageId)
+        return {
+          messages: targetIndex >= 0 ? current.messages.slice(0, targetIndex) : current.messages,
+          userMsgCount,
+          ...resetCancelState(),
+          expression: 'neutral',
+          error: null,
+        }
+      })
+      return true
     } catch (e) {
       console.error('Failed to delete messages:', e)
+      set({ error: '删除失败，聊天记录未被修改' })
+      return false
     }
-    set((s) => {
-      if (s.activePersonaId !== state.activePersonaId) return {}
-      const targetIndex = s.messages.findIndex((message) => message.id === fromMessageId)
-      return {
-        messages: targetIndex >= 0 ? s.messages.slice(0, targetIndex) : s.messages,
-        ...resetCancelState(),
-        expression: 'neutral',
-        error: null,
-      }
-    })
   },
 
   regenerate: async (persona, aiSettings, ttsSettings, aiMessageId) => {
@@ -228,7 +258,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     if (!turn) return
 
     const triggerUserMsg = turn.userMessage
-    await state.deleteFrom(turn.assistantMessage.id)
+    if (!(await state.deleteFrom(turn.assistantMessage.id))) return
     if (get().activePersonaId !== persona.id) return
 
     const remaining = get().messages
@@ -253,6 +283,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
     try {
       await doStream(apiMessages, aiSettings, reqId, controller, ttsSettings, persona.id)
+      if (controller.signal.aborted) return
       maybeEvaluateRelation(persona, aiSettings)
     } catch (error: unknown) {
       if (controller.signal.aborted) return
@@ -269,11 +300,14 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     await cancelCurrent(state)
     try {
       await invoke('clear_messages', { personaId: state.activePersonaId })
+      if (get().activePersonaId === state.activePersonaId) {
+        set({ messages: [], userMsgCount: 0, expression: 'neutral', error: null, ...resetCancelState() })
+      }
+      return true
     } catch (e) {
       console.error('Failed to clear messages:', e)
-    }
-    if (get().activePersonaId === state.activePersonaId) {
-      set({ messages: [], expression: 'neutral', error: null, ...resetCancelState() })
+      set({ error: '清空失败，聊天记录未被修改' })
+      return false
     }
   },
 }))
@@ -289,76 +323,87 @@ async function doStream(
   const onChunk = new Channel<AiChunk>()
   let fullContent = ''
   let fullThinking = ''
+  let resolveCompleted: () => void = () => {}
+  const completed = new Promise<void>((resolve) => {
+    resolveCompleted = resolve
+  })
 
   onChunk.onmessage = (chunk) => {
-    if (controller.signal.aborted || useChatStore.getState().activePersonaId !== personaId) return
+    if (chunk.done) resolveCompleted()
+    if (controller.signal.aborted || useChatStore.getState().activePersonaId !== personaId || chunk.done) return
 
     fullContent += chunk.content
     fullThinking += chunk.thinking
     useChatStore.setState({ streamingContent: fullContent, streamingThinking: fullThinking })
-
-    if (chunk.done) {
-      const aiMsg: Message = {
-        id: crypto.randomUUID(),
-        role: 'assistant',
-        content: fullContent || '...',
-        thinking: fullThinking || undefined,
-        timestamp: Date.now(),
-      }
-
-      useChatStore.setState((s) =>
-        s.activePersonaId === personaId
-          ? {
-              messages: [...s.messages, aiMsg],
-              isTyping: false,
-              streamingContent: '',
-              streamingThinking: '',
-              expression: detectExpression(fullContent),
-              abortController: null,
-              requestId: null,
-            }
-          : s,
-      )
-
-      invoke('save_message', { personaId, message: aiMsg }).catch((e) => {
-        console.error('Failed to save AI message:', e)
-      })
-
-      if (ttsSettings.autoPlay && ttsSettings.enabled) {
-        useChatStore.setState({ isSpeaking: true })
-        speak(fullContent, ttsSettings).finally(() => useChatStore.setState({ isSpeaking: false }))
-      }
-
-      const capturedContent = fullContent
-      setTimeout(() => {
-        const currentState = useChatStore.getState()
-        if (
-          currentState.activePersonaId === personaId &&
-          currentState.expression !== 'neutral' &&
-          currentState.expression === detectExpression(capturedContent)
-        ) {
-          useChatStore.setState({ expression: 'neutral' })
-        }
-      }, 5000)
-    }
   }
 
-  await invoke('send_message', {
-    messagesJson: JSON.stringify(apiMessages),
-    apiKey: aiSettings.apiKey,
-    endpoint: aiSettings.endpoint,
-    model: aiSettings.model,
-    temperature: aiSettings.temperature,
-    maxTokens: aiSettings.maxTokens,
-    requestId: reqId,
-    onChunk,
-  })
+  await Promise.all([
+    invoke('send_message', {
+      messagesJson: JSON.stringify(apiMessages),
+      endpoint: aiSettings.endpoint,
+      model: aiSettings.model,
+      temperature: aiSettings.temperature,
+      maxTokens: aiSettings.maxTokens,
+      requestId: reqId,
+      onChunk,
+    }),
+    completed,
+  ])
+
+  if (controller.signal.aborted || useChatStore.getState().activePersonaId !== personaId) return
+
+  const aiMsg: Message = {
+    id: crypto.randomUUID(),
+    role: 'assistant',
+    content: fullContent || '...',
+    thinking: fullThinking || undefined,
+    timestamp: Date.now(),
+  }
+  let persistenceError: string | null = null
+  try {
+    await invoke('save_message', { personaId, message: aiMsg })
+  } catch (error) {
+    console.error('Failed to save AI message:', error)
+    persistenceError = '回复已生成，但保存失败，重启后可能丢失'
+  }
+
+  useChatStore.setState((state) =>
+    state.activePersonaId === personaId
+      ? {
+          messages: [...state.messages, aiMsg],
+          isTyping: false,
+          streamingContent: '',
+          streamingThinking: '',
+          expression: detectExpression(fullContent),
+          abortController: null,
+          requestId: null,
+          error: persistenceError,
+        }
+      : state,
+  )
+
+  if (ttsSettings.autoPlay && ttsSettings.enabled) {
+    useChatStore.setState({ isSpeaking: true })
+    void speak(fullContent, ttsSettings).finally(() => useChatStore.setState({ isSpeaking: false }))
+  }
+
+  const capturedContent = fullContent
+  setTimeout(() => {
+    const currentState = useChatStore.getState()
+    if (
+      currentState.activePersonaId === personaId &&
+      currentState.expression !== 'neutral' &&
+      currentState.expression === detectExpression(capturedContent)
+    ) {
+      useChatStore.setState({ expression: 'neutral' })
+    }
+  }, 5000)
 }
 
 const STAGE_ORDER = ['刚认识', '朋友', '暧昧', '热恋', '老夫老妻']
 
 async function maybeEvaluateRelation(persona: Persona, aiSettings: AISettings) {
-  if (!aiSettings.autoProgress || !aiSettings.apiKey) return
+  if (!aiSettings.autoProgress) return
 
   const state = useChatStore.getState()
   if (state.activePersonaId !== persona.id) return
@@ -376,7 +421,6 @@ async function maybeEvaluateRelation(persona: Persona, aiSettings: AISettings) {
 
   try {
     const result: string = await invoke('evaluate_relationship', {
-      apiKey: aiSettings.apiKey,
       endpoint: aiSettings.endpoint,
       model: aiSettings.model,
       messagesJson: JSON.stringify(evalMsgs),
@@ -407,8 +451,8 @@ async function maybeEvaluateRelation(persona: Persona, aiSettings: AISettings) {
         content: greeting,
         timestamp: Date.now(),
       }
-      useChatStore.setState((s) => ({ messages: [...s.messages, notifyMsg] }))
-      invoke('save_message', { personaId: persona.id, message: notifyMsg }).catch(() => {})
+      await invoke('save_message', { personaId: persona.id, message: notifyMsg })
+      useChatStore.setState((state) => ({ messages: [...state.messages, notifyMsg] }))
 
       if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
         new Notification('灵伴', { body: greeting, silent: false })

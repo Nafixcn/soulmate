@@ -1,3 +1,4 @@
+import { invoke } from '@tauri-apps/api/core'
 import type { Message } from '../types'
 
 export function buildChatTranscript(messages: Message[], personaName: string, exportedAt = new Date()): string {
@@ -21,4 +22,9 @@ export function downloadChatTranscript(messages: Message[], personaName: string)
   anchor.download = `soulmate-chat-${exportedAt.getTime()}.md`
   anchor.click()
   URL.revokeObjectURL(url)
+}
+
+export async function exportFullChatTranscript(personaId: string, personaName: string): Promise<void> {
+  const messages = await invoke<Message[]>('get_all_messages', { personaId })
+  downloadChatTranscript(messages, personaName)
 }

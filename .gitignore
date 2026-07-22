@@ -8,4 +8,6 @@ target/
 .env.local
 *.swp
 *.swo
+test-results/
+playwright-report/
 src-tauri/gen/

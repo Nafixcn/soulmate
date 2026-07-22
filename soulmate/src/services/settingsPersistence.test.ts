@@ -1,11 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   clearLegacyApiKey,
-  loadApiKey,
+  clearLocalSettingsSnapshots,
+  deletePersonaData,
+  hasApiKey,
   loadLegacyApiKey,
+  loadLegacyLocalApiKey,
   loadSettingsSnapshot,
   saveApiKey,
   saveSettingsSnapshot,
+  type SettingsSnapshotInput,
 } from './settingsPersistence'
 import type { AISettings, Persona, TTSSettings, ThemeColors } from '../types'
 
@@ -26,7 +30,6 @@ vi.mock('@tauri-apps/plugin-store', () => ({
 }))
 
 const aiSettings: AISettings = {
-  apiKey: 'secret-key',
   endpoint: 'https://example.com',
   model: 'model',
   temperature: 0.6,
@@ -70,58 +73,80 @@ const theme: ThemeColors = {
   petals: [],
 }
 
+const snapshot: SettingsSnapshotInput = {
+  aiSettings,
+  ttsSettings,
+  persona,
+  personas: [persona],
+  activePersonaIndex: 0,
+  theme,
+  themePresetIndex: 0,
+}
+
 describe('settings persistence', () => {
   let values: Map<string, string>
 
   beforeEach(() => {
     values = new Map()
     vi.clearAllMocks()
+    mocks.invoke.mockResolvedValue(undefined)
     vi.stubGlobal('localStorage', {
       getItem: (key: string) => values.get(key) ?? null,
       setItem: (key: string, value: string) => values.set(key, value),
+      removeItem: (key: string) => values.delete(key),
     })
   })
 
-  it('never writes the API key to localStorage', () => {
-    saveSettingsSnapshot({
-      aiSettings,
-      ttsSettings,
-      persona,
-      personas: [persona],
-      activePersonaIndex: 0,
-      theme,
-      themePresetIndex: 0,
+  it('stores non-sensitive settings in SQLite', async () => {
+    await saveSettingsSnapshot(snapshot)
+
+    expect(mocks.invoke).toHaveBeenCalledWith('save_settings', {
+      settingsJson: JSON.stringify(snapshot),
     })
-
-    const raw = values.get('soulmate_v3_settings')
-    expect(raw).not.toContain('secret-key')
-    expect(loadSettingsSnapshot()?.aiSettings?.model).toBe('model')
+    expect(JSON.stringify(snapshot)).not.toContain('apiKey')
   })
 
-  it('loads the legacy settings shape for migration', () => {
-    values.set('soulmate_v2_settings', JSON.stringify({ aiSettings, ttsSettings, persona }))
+  it('loads settings from SQLite before local migration data', async () => {
+    mocks.invoke.mockResolvedValueOnce(JSON.stringify(snapshot))
+    values.set('soulmate_v3_settings', JSON.stringify({ aiSettings: { model: 'legacy' } }))
 
-    const snapshot = loadSettingsSnapshot()
+    const loaded = await loadSettingsSnapshot()
 
-    expect(snapshot?.personas).toEqual([persona])
-    expect(snapshot?.activePersonaIndex).toBe(0)
+    expect(loaded?.source).toBe('database')
+    expect(loaded?.snapshot.aiSettings?.model).toBe('model')
   })
 
-  it('reads and writes the API key through the system keychain commands', async () => {
-    mocks.invoke.mockResolvedValueOnce('keychain-key').mockResolvedValueOnce(undefined)
+  it('loads the legacy settings shape for migration', async () => {
+    mocks.invoke.mockResolvedValueOnce(null)
+    values.set(
+      'soulmate_v2_settings',
+      JSON.stringify({ aiSettings: { ...aiSettings, apiKey: 'legacy-key' }, ttsSettings, persona }),
+    )
 
-    await expect(loadApiKey()).resolves.toBe('keychain-key')
+    const loaded = await loadSettingsSnapshot()
+
+    expect(loaded?.source).toBe('local')
+    expect(loaded?.snapshot.personas).toEqual([persona])
+    expect(loaded?.snapshot.aiSettings?.apiKey).toBe('legacy-key')
+    expect(loadLegacyLocalApiKey()).toBe('legacy-key')
+  })
+
+  it('only exposes keychain configuration state to the frontend', async () => {
+    mocks.invoke.mockResolvedValueOnce(true).mockResolvedValueOnce(undefined)
+
+    await expect(hasApiKey()).resolves.toBe(true)
     await expect(saveApiKey('new-key')).resolves.toBe(true)
 
-    expect(mocks.invoke).toHaveBeenNthCalledWith(1, 'load_api_key')
+    expect(mocks.invoke).toHaveBeenNthCalledWith(1, 'has_api_key')
     expect(mocks.invoke).toHaveBeenNthCalledWith(2, 'save_api_key', { apiKey: 'new-key' })
+    expect(mocks.invoke).not.toHaveBeenCalledWith('load_api_key')
   })
 
-  it('returns a safe fallback when the system keychain is unavailable', async () => {
+  it('returns safe keychain fallbacks when the runtime is unavailable', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     mocks.invoke.mockRejectedValue(new Error('unavailable'))
 
-    await expect(loadApiKey()).resolves.toBe('')
+    await expect(hasApiKey()).resolves.toBe(false)
     await expect(saveApiKey('new-key')).resolves.toBe(false)
     warn.mockRestore()
   })
@@ -134,5 +159,23 @@ describe('settings persistence', () => {
 
     expect(mocks.storeDelete).toHaveBeenCalledWith('apiKey')
     expect(mocks.storeSave).toHaveBeenCalledOnce()
+  })
+
+  it('clears browser snapshots only when migration has succeeded', () => {
+    values.set('soulmate_v3_settings', '{}')
+    values.set('soulmate_v2_settings', '{}')
+
+    clearLocalSettingsSnapshots()
+
+    expect(values.size).toBe(0)
+  })
+
+  it('deletes persona data and updates settings in one backend command', async () => {
+    await deletePersonaData(persona.id, snapshot)
+
+    expect(mocks.invoke).toHaveBeenCalledWith('delete_persona', {
+      personaId: persona.id,
+      settingsJson: JSON.stringify(snapshot),
+    })
   })
 })

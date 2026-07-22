@@ -10,6 +10,7 @@ import {
   Flame,
   InfinityIcon,
   ChevronDown,
+  UsersRound,
 } from 'lucide-react'
 
 interface Props {
@@ -110,6 +111,9 @@ export const ChatHeader: React.FC<Props> = ({
       </button>
       <button className="header-btn" onClick={onEditPersona} title="编辑角色">
         <UserPen size={18} />
+      </button>
+      <button className="header-btn" onClick={onManagePersonas} title="管理角色">
+        <UsersRound size={18} />
       </button>
       <button className="header-btn" onClick={onSettings} title="设置">
         <Settings size={18} />

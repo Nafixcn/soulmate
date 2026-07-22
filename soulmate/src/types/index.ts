@@ -24,7 +24,6 @@ export interface Persona {
 export type Expression = 'neutral' | 'happy' | 'shy' | 'loving' | 'surprised' | 'thinking'
 
 export interface AISettings {
-  apiKey: string
   endpoint: string
   model: string
   temperature: number
@@ -32,6 +31,12 @@ export interface AISettings {
   autoProgress: boolean
   evalInterval: number
   useWebSearch: boolean
+}
+
+export interface MessagePage {
+  messages: Message[]
+  hasMore: boolean
+  userMessageCount: number
 }
 
 export interface TTSSettings {

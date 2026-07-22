@@ -6,8 +6,10 @@ const STORE_PATH = 'soulmate-settings.json'
 const STORAGE_KEY = 'soulmate_v3_settings'
 const LEGACY_STORAGE_KEY = 'soulmate_v2_settings'
 
+type LegacyAISettings = Partial<AISettings> & { apiKey?: string }
+
 export interface SettingsSnapshot {
-  aiSettings?: Partial<AISettings>
+  aiSettings?: LegacyAISettings
   ttsSettings?: Partial<TTSSettings>
   persona?: Partial<Persona>
   personas?: Partial<Persona>[]
@@ -16,7 +18,7 @@ export interface SettingsSnapshot {
   themePresetIndex?: number
 }
 
-interface SettingsSnapshotInput {
+export interface SettingsSnapshotInput {
   aiSettings: AISettings
   ttsSettings: TTSSettings
   persona: Persona
@@ -26,47 +28,61 @@ interface SettingsSnapshotInput {
   themePresetIndex: number
 }
 
+export interface LoadedSettingsSnapshot {
+  snapshot: SettingsSnapshot
+  source: 'database' | 'local'
+}
+
 let tauriStore: Awaited<ReturnType<typeof load>> | null = null
 let storeLoading: Promise<void> | null = null
 
-export function loadSettingsSnapshot(): SettingsSnapshot | null {
+export async function loadSettingsSnapshot(): Promise<LoadedSettingsSnapshot | null> {
+  try {
+    const raw = await invoke<string | null>('get_settings')
+    const snapshot = parseSnapshot(raw)
+    if (snapshot) return { snapshot, source: 'database' }
+  } catch (error) {
+    console.warn('Failed to load settings from database:', error)
+  }
+
   const current = parseSnapshot(localStorage.getItem(STORAGE_KEY))
-  if (current) return current
+  if (current) return { snapshot: current, source: 'local' }
 
   const legacy = parseSnapshot(localStorage.getItem(LEGACY_STORAGE_KEY))
   if (!legacy) return null
 
   return {
-    aiSettings: legacy.aiSettings,
-    ttsSettings: legacy.ttsSettings,
-    persona: legacy.persona,
-    personas: legacy.persona ? [legacy.persona] : undefined,
-    activePersonaIndex: 0,
+    source: 'local',
+    snapshot: {
+      aiSettings: legacy.aiSettings,
+      ttsSettings: legacy.ttsSettings,
+      persona: legacy.persona,
+      personas: legacy.persona ? [legacy.persona] : undefined,
+      activePersonaIndex: 0,
+    },
   }
 }
 
-export function saveSettingsSnapshot(snapshot: SettingsSnapshotInput): void {
-  const { apiKey, ...safeAISettings } = snapshot.aiSettings
-  void apiKey
-
-  try {
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({
-        ...snapshot,
-        aiSettings: safeAISettings,
-      }),
-    )
-  } catch {
-    console.warn('localStorage 已满，头像可能过大，请使用小于500KB的图片')
-  }
+export async function saveSettingsSnapshot(snapshot: SettingsSnapshotInput): Promise<void> {
+  await invoke('save_settings', { settingsJson: JSON.stringify(snapshot) })
 }
 
-export async function loadApiKey(): Promise<string> {
+export function clearLocalSettingsSnapshots(): void {
+  localStorage.removeItem(STORAGE_KEY)
+  localStorage.removeItem(LEGACY_STORAGE_KEY)
+}
+
+export function loadLegacyLocalApiKey(): string {
+  const current = parseSnapshot(localStorage.getItem(STORAGE_KEY))
+  const legacy = parseSnapshot(localStorage.getItem(LEGACY_STORAGE_KEY))
+  return current?.aiSettings?.apiKey || legacy?.aiSettings?.apiKey || ''
+}
+
+export async function hasApiKey(): Promise<boolean> {
   try {
-    return (await invoke<string | null>('load_api_key')) || ''
+    return await invoke<boolean>('has_api_key')
   } catch {
-    return ''
+    return false
   }
 }
 
@@ -99,6 +115,10 @@ export async function clearLegacyApiKey(): Promise<void> {
   }
 }
 
+export async function deletePersonaData(personaId: string, snapshot: SettingsSnapshotInput): Promise<void> {
+  await invoke('delete_persona', { personaId, settingsJson: JSON.stringify(snapshot) })
+}
+
 async function getStore() {
   if (tauriStore) return tauriStore
   if (!storeLoading) {
@@ -113,7 +133,8 @@ async function getStore() {
 function parseSnapshot(raw: string | null): SettingsSnapshot | null {
   if (!raw) return null
   try {
-    return JSON.parse(raw) as SettingsSnapshot
+    const parsed: unknown = JSON.parse(raw)
+    return parsed && typeof parsed === 'object' ? (parsed as SettingsSnapshot) : null
   } catch (error) {
     console.warn('Failed to parse settings:', error)
     return null

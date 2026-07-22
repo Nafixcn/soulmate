@@ -6,7 +6,7 @@ import remarkGfm from 'remark-gfm'
 import { useChatLifecycle } from '../hooks/useChatLifecycle'
 import { useChatScroll } from '../hooks/useChatScroll'
 import { useChatShortcuts } from '../hooks/useChatShortcuts'
-import { downloadChatTranscript } from '../services/chatExport'
+import { exportFullChatTranscript } from '../services/chatExport'
 import { ChatHeader } from './ChatHeader'
 import { MessageBubble } from './MessageBubble'
 import { ChatInput } from './ChatInput'
@@ -29,19 +29,32 @@ export const ChatWindow: React.FC = () => {
   const clearError = useChatStore((s) => s.clearError)
   const loadMessages = useChatStore((s) => s.loadMessages)
   const loadEarlierMessages = useChatStore((s) => s.loadEarlierMessages)
+  const revealMessage = useChatStore((s) => s.revealMessage)
   const hasMore = useChatStore((s) => s.hasMore)
   const isLoadingMore = useChatStore((s) => s.isLoadingMore)
   const isLoadingConversation = useChatStore((s) => s.isLoadingConversation)
   const deleteFrom = useChatStore((s) => s.deleteFrom)
   const regenerate = useChatStore((s) => s.regenerate)
-  const { aiSettings, ttsSettings, persona, personas, activePersonaIndex, setPersona, switchPersona, theme } =
-    useSettingsStore()
+  const {
+    aiSettings,
+    ttsSettings,
+    persona,
+    personas,
+    activePersonaIndex,
+    setPersona,
+    switchPersona,
+    theme,
+    aiConfigured,
+    persistenceError,
+    clearPersistenceError,
+  } = useSettingsStore()
 
   const [showEditor, setShowEditor] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [showManagePersonas, setShowManagePersonas] = useState(false)
   const [showSearch, setShowSearch] = useState(false)
   const [streamingThinkOpen, setStreamingThinkOpen] = useState(true)
+  const [actionError, setActionError] = useState<string | null>(null)
   const [petals] = useMemo(() => {
     const arr = Array.from({ length: petalCount }, (_, i) => ({
       id: i,
@@ -72,13 +85,36 @@ export const ChatWindow: React.FC = () => {
   }, [])
 
   const toggleSearch = useCallback(() => setShowSearch((visible) => !visible), [])
-  const handleExport = useCallback(() => downloadChatTranscript(messages, persona.name), [messages, persona.name])
+  const handleExport = useCallback(() => {
+    void exportFullChatTranscript(persona.id, persona.name)
+      .then(() => setActionError(null))
+      .catch((exportError) => {
+        console.error('Failed to export chat:', exportError)
+        setActionError('导出失败，请稍后重试')
+      })
+  }, [persona.id, persona.name])
 
   useChatShortcuts({ closeOverlays, toggleSearch, exportChat: handleExport })
 
   const handleSend = useCallback(
-    (text: string) => sendMessage(text, persona, aiSettings, ttsSettings),
-    [persona, aiSettings, ttsSettings, sendMessage],
+    (text: string) => {
+      if (!aiConfigured) {
+        setShowSettings(true)
+        return Promise.resolve()
+      }
+      return sendMessage(text, persona, aiSettings, ttsSettings)
+    },
+    [persona, aiSettings, ttsSettings, aiConfigured, sendMessage],
+  )
+
+  const handleSearchResult = useCallback(
+    async (messageId: string) => {
+      const revealed = await revealMessage(messageId)
+      if (!revealed) return false
+      requestAnimationFrame(() => scrollToMessage(messageId))
+      return true
+    },
+    [revealMessage, scrollToMessage],
   )
 
   const handleDeleteFrom = useCallback(
@@ -87,6 +123,11 @@ export const ChatWindow: React.FC = () => {
     },
     [deleteFrom],
   )
+
+  const handleClearChat = useCallback(() => {
+    if (messages.length === 0 || !window.confirm('清空当前角色的全部聊天记录？')) return
+    void clearChat()
+  }, [clearChat, messages.length])
 
   const handleRegenerate = useCallback(
     (aiMessageId: string) => {
@@ -120,7 +161,7 @@ export const ChatWindow: React.FC = () => {
         onEditPersona={() => setShowEditor(true)}
         onManagePersonas={() => setShowManagePersonas(true)}
         onSettings={() => setShowSettings(true)}
-        onClearChat={clearChat}
+        onClearChat={handleClearChat}
         onSwitchPersona={switchPersona}
       />
       <div className="chat-main">
@@ -130,8 +171,18 @@ export const ChatWindow: React.FC = () => {
               <AlertTriangle size={14} /> {error}
             </div>
           )}
+          {persistenceError && (
+            <div className="error-banner" onClick={clearPersistenceError}>
+              <AlertTriangle size={14} /> {persistenceError}
+            </div>
+          )}
+          {actionError && (
+            <div className="error-banner" onClick={() => setActionError(null)}>
+              <AlertTriangle size={14} /> {actionError}
+            </div>
+          )}
           {showSearch && (
-            <SearchPanel personaId={persona.id} onClose={() => setShowSearch(false)} onScrollTo={scrollToMessage} />
+            <SearchPanel personaId={persona.id} onClose={() => setShowSearch(false)} onScrollTo={handleSearchResult} />
           )}
           <div className="chat-toolbar">
             <button className="toolbar-btn" onClick={toggleSearch} title="搜索 (Ctrl+F)">

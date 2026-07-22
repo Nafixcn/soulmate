@@ -6,7 +6,7 @@ import { X, Search } from 'lucide-react'
 interface Props {
   personaId: string
   onClose: () => void
-  onScrollTo: (messageId: string) => void
+  onScrollTo: (messageId: string) => Promise<boolean>
 }
 
 export const SearchPanel: React.FC<Props> = ({ personaId, onClose, onScrollTo }) => {
@@ -70,8 +70,9 @@ export const SearchPanel: React.FC<Props> = ({ personaId, onClose, onScrollTo })
               key={msg.id}
               className="search-result-item"
               onClick={() => {
-                onScrollTo(msg.id)
-                onClose()
+                void onScrollTo(msg.id).then((revealed) => {
+                  if (revealed) onClose()
+                })
               }}
             >
               <span className={`search-result-role ${msg.role}`}>{msg.role === 'user' ? '我' : 'TA'}</span>
