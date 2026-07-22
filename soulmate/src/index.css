@@ -953,6 +953,30 @@ body,
   position: relative;
   transition: all 0.2s;
 }
+.avatar-change-label {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 6px;
+  cursor: pointer;
+  overflow: hidden;
+}
+.avatar-file-input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.avatar-file-input:disabled {
+  cursor: default;
+}
+.avatar-error {
+  margin-top: 6px;
+  color: var(--danger);
+  font-size: 11px;
+  line-height: 1.4;
+}
 .avatar-placeholder:hover {
   border-color: #f0a8c0;
   background: rgba(255, 255, 255, 0.9);

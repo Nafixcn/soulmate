@@ -16,6 +16,8 @@ const EYES = ['#ff6b9d', '#8B4513', '#9b59b6', '#4a90d9', '#5dae7e', '#e8b848', 
 
 export const PersonaEditor: React.FC<Props> = ({ persona, onChange, onClose }) => {
   const [draft, setDraft] = useState<Persona>({ ...persona })
+  const [avatarProcessing, setAvatarProcessing] = useState(false)
+  const [avatarError, setAvatarError] = useState<string | null>(null)
 
   const update = <K extends keyof Persona>(key: K, value: Persona[K]) => {
     setDraft((prev) => ({ ...prev, [key]: value }))
@@ -24,13 +26,24 @@ export const PersonaEditor: React.FC<Props> = ({ persona, onChange, onClose }) =
   const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+    setAvatarError(null)
     if (file.size > 300 * 1024) {
-      alert('图片不能超过300KB')
+      setAvatarError('图片不能超过 300KB')
+      e.target.value = ''
       return
     }
+    setAvatarProcessing(true)
     const reader = new FileReader()
+    reader.onerror = () => {
+      setAvatarProcessing(false)
+      setAvatarError('图片读取失败，请换一张试试')
+    }
     reader.onload = () => {
       const img = new Image()
+      img.onerror = () => {
+        setAvatarProcessing(false)
+        setAvatarError('图片解析失败，请换一张试试')
+      }
       img.onload = () => {
         const canvas = document.createElement('canvas')
         const size = 150
@@ -43,6 +56,10 @@ export const PersonaEditor: React.FC<Props> = ({ persona, onChange, onClose }) =
           const sy = (img.height - minDim) / 2
           ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, size, size)
           update('avatar', canvas.toDataURL('image/jpeg', 0.6))
+          setAvatarProcessing(false)
+        } else {
+          setAvatarProcessing(false)
+          setAvatarError('头像处理失败，请稍后重试')
         }
       }
       img.src = reader.result as string
@@ -54,6 +71,7 @@ export const PersonaEditor: React.FC<Props> = ({ persona, onChange, onClose }) =
   const handleRemoveAvatar = () => update('avatar', '')
 
   const handleSave = () => {
+    if (avatarProcessing) return
     onChange(draft)
     onClose()
   }
@@ -82,25 +100,22 @@ export const PersonaEditor: React.FC<Props> = ({ persona, onChange, onClose }) =
                 <label className="avatar-placeholder" style={{ cursor: 'pointer' }}>
                   <span className="avatar-emoji-lg">{draft.emoji}</span>
                   <Camera size={14} className="avatar-camera" />
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleAvatarUpload}
-                    style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
-                  />
+                  <input className="avatar-file-input" type="file" accept="image/*" onChange={handleAvatarUpload} />
                 </label>
               )}
               {draft.avatar && (
-                <label className="tag" style={{ marginTop: 6, cursor: 'pointer' }}>
-                  更换图片
+                <label className="tag avatar-change-label">
+                  {avatarProcessing ? '处理中...' : '更换图片'}
                   <input
+                    className="avatar-file-input"
                     type="file"
                     accept="image/*"
                     onChange={handleAvatarUpload}
-                    style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
+                    disabled={avatarProcessing}
                   />
                 </label>
               )}
+              {avatarError && <div className="avatar-error">{avatarError}</div>}
             </div>
           </div>
           <div className="form-group">
@@ -206,8 +221,13 @@ export const PersonaEditor: React.FC<Props> = ({ persona, onChange, onClose }) =
             <button className="tag" onClick={onClose} style={{ padding: '8px 24px' }}>
               取消
             </button>
-            <button className="tag active" onClick={handleSave} style={{ padding: '8px 24px' }}>
-              保存
+            <button
+              className="tag active"
+              onClick={handleSave}
+              disabled={avatarProcessing}
+              style={{ padding: '8px 24px' }}
+            >
+              {avatarProcessing ? '处理中...' : '保存'}
             </button>
           </div>
         </div>

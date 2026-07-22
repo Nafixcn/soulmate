@@ -24,6 +24,25 @@ test('creates a second persona from the always-visible manager', async ({ page }
   await expect(page.locator('.header-name')).toContainText('小雨')
 })
 
+test('updates a persona avatar and keeps save button clickable', async ({ page }) => {
+  await page.goto('/')
+
+  await page.getByTitle('编辑角色').click()
+  await page.locator('input[type="file"]').setInputFiles({
+    name: 'avatar.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFklEQVR42mP8z8Dwn4GBgYGJAQoAHxcCBAuYWAQAAAAASUVORK5CYII=',
+      'base64',
+    ),
+  })
+  await expect(page.locator('.avatar-preview img')).toHaveAttribute('src', /^data:image\/jpeg/)
+  await page.getByRole('button', { name: '保存' }).click()
+
+  await expect(page.locator('.persona-panel')).toBeHidden()
+  await expect(page.locator('.avatar-img-header')).toHaveAttribute('src', /^data:image\/jpeg/)
+})
+
 test('loads an old search result before scrolling to it', async ({ page }) => {
   await page.goto('/')
 
