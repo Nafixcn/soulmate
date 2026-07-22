@@ -35,7 +35,7 @@ export const PersonaManager: React.FC<Props> = ({
 
   const startNew = () => {
     setEditing(-1)
-    setDraft({ ...DEFAULT_PERSONA, name: '' })
+    setDraft({ ...DEFAULT_PERSONA, id: crypto.randomUUID(), name: '' })
   }
 
   const saveEdit = () => {
@@ -171,7 +171,7 @@ export const PersonaManager: React.FC<Props> = ({
         </div>
         <div className="persona-body">
           {personas.map((p, i) => (
-            <div key={i} className={`persona-list-item ${i === activeIndex ? 'active' : ''}`}>
+            <div key={p.id} className={`persona-list-item ${i === activeIndex ? 'active' : ''}`}>
               <div
                 className="persona-list-info"
                 onClick={() => {

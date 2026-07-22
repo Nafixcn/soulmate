@@ -4,36 +4,42 @@ import { invoke } from '@tauri-apps/api/core'
 import { X, Search } from 'lucide-react'
 
 interface Props {
+  personaId: string
   onClose: () => void
-  onScrollTo: (timestamp: number) => void
+  onScrollTo: (messageId: string) => void
 }
 
-export const SearchPanel: React.FC<Props> = ({ onClose, onScrollTo }) => {
+export const SearchPanel: React.FC<Props> = ({ personaId, onClose, onScrollTo }) => {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<Message[]>([])
   const [searching, setSearching] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const requestSequenceRef = useRef(0)
 
   useEffect(() => {
     inputRef.current?.focus()
   }, [])
 
-  const doSearch = useCallback(async (q: string) => {
-    if (!q.trim()) {
-      setResults([])
-      return
-    }
-    setSearching(true)
-    try {
-      const msgs = await invoke<Message[]>('search_messages', { query: q })
-      setResults(msgs)
-    } catch (e) {
-      console.error('Search failed:', e)
-    } finally {
-      setSearching(false)
-    }
-  }, [])
+  const doSearch = useCallback(
+    async (q: string) => {
+      const requestSequence = ++requestSequenceRef.current
+      if (!q.trim()) {
+        setResults([])
+        return
+      }
+      setSearching(true)
+      try {
+        const msgs = await invoke<Message[]>('search_messages', { personaId, query: q })
+        if (requestSequence === requestSequenceRef.current) setResults(msgs)
+      } catch (e) {
+        console.error('Search failed:', e)
+      } finally {
+        if (requestSequence === requestSequenceRef.current) setSearching(false)
+      }
+    },
+    [personaId],
+  )
 
   useEffect(() => {
     clearTimeout(timerRef.current)
@@ -64,7 +70,7 @@ export const SearchPanel: React.FC<Props> = ({ onClose, onScrollTo }) => {
               key={msg.id}
               className="search-result-item"
               onClick={() => {
-                onScrollTo(msg.timestamp)
+                onScrollTo(msg.id)
                 onClose()
               }}
             >

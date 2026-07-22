@@ -7,6 +7,7 @@ export interface Message {
 }
 
 export interface Persona {
+  id: string
   name: string
   age: number
   personality: string
@@ -187,6 +188,7 @@ export interface AiChunk {
 }
 
 export const DEFAULT_PERSONA: Persona = {
+  id: 'default',
   name: '灵伴',
   age: 20,
   personality: '温柔体贴',

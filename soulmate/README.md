@@ -13,7 +13,7 @@ AI 女友桌面陪伴应用 —— 基于 Tauri 2 + React 19 + Rust 构建。
 - **关系推进**：每 20 条消息 AI 自动评估并推进关系阶段
 - **消息搜索/导出**：全文搜索和 Markdown 导出
 - **消息持久化**：SQLite 存储聊天记录
-- **微信登录**：OAuth 登录（开发中）
+- **安全配置**：API Key 由操作系统钥匙串存储
 
 ## 技术栈
 
@@ -60,8 +60,8 @@ soulmate/
     └── src/
         ├── lib.rs          # 应用入口
         ├── ai.rs           # LLM 流式调用
+        ├── credentials.rs  # 系统钥匙串
         ├── db.rs           # SQLite 持久化
-        ├── auth.rs         # 微信 OAuth
         └── speech.rs       # macOS 语音识别
 ```
 

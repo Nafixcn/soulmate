@@ -383,7 +383,6 @@ body,
   gap: 8px;
   margin-bottom: 14px;
   align-items: flex-end;
-  animation: msgIn 0.3s ease-out;
 }
 .msg-row.user {
   justify-content: flex-end;
@@ -1037,25 +1036,4 @@ body,
 .persona-action-btn.danger:hover {
   background: rgba(255, 80, 80, 0.1);
   color: #c06050;
-}
-
-/* ─── WeChat ─── */
-.wechat-user-info {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-.wechat-avatar {
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.6);
-}
-.wechat-nickname {
-  font-size: 11px;
-  color: #fff;
-  max-width: 60px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }

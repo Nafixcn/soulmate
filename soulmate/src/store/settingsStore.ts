@@ -1,41 +1,14 @@
 import { create } from 'zustand'
 import { AISettings, TTSSettings, Persona, API_PRESETS, DEFAULT_PERSONA, ThemeColors, THEME_PRESETS } from '../types'
-import { load } from '@tauri-apps/plugin-store'
-
-const STORE_PATH = 'soulmate-settings.json'
-let tauriStore: Awaited<ReturnType<typeof load>> | null = null
-let storeLoading: Promise<void> | null = null
-
-async function getStore() {
-  if (tauriStore) return tauriStore
-  if (!storeLoading) {
-    storeLoading = (async () => {
-      tauriStore = await load(STORE_PATH, { autoSave: false, defaults: {} })
-    })()
-  }
-  await storeLoading
-  return tauriStore!
-}
-
-async function loadApiKeyFromStore(): Promise<string> {
-  try {
-    const s = await getStore()
-    const key = await s.get<string>('apiKey')
-    return key || ''
-  } catch {
-    return ''
-  }
-}
-
-async function saveApiKeyToStore(apiKey: string) {
-  try {
-    const s = await getStore()
-    await s.set('apiKey', apiKey || '')
-    await s.save()
-  } catch (e) {
-    console.warn('Failed to save API key to store:', e)
-  }
-}
+import {
+  clearLegacyApiKey,
+  loadApiKey,
+  loadLegacyApiKey,
+  loadSettingsSnapshot,
+  saveApiKey,
+  saveSettingsSnapshot,
+} from '../services/settingsPersistence'
+import { normalizePersonas } from '../domain/persona'
 
 interface SettingsStore {
   aiSettings: AISettings
@@ -60,8 +33,6 @@ interface SettingsStore {
   removePersona: (index: number) => void
   switchPersona: (index: number) => void
 }
-
-const STORAGE_KEY = 'soulmate_v3_settings'
 
 const defaultAI: AISettings = {
   apiKey: '',
@@ -89,14 +60,7 @@ function debouncedSave() {
   saveTimer = setTimeout(() => {
     const { aiSettings, ttsSettings, persona, personas, activePersonaIndex, theme, themePresetIndex } =
       useSettingsStore.getState()
-    try {
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({ aiSettings, ttsSettings, persona, personas, activePersonaIndex, theme, themePresetIndex }),
-      )
-    } catch {
-      console.warn('localStorage 已满，头像可能过大，请使用小于500KB的图片')
-    }
+    saveSettingsSnapshot({ aiSettings, ttsSettings, persona, personas, activePersonaIndex, theme, themePresetIndex })
     saveTimer = null
   }, 300)
 }
@@ -128,7 +92,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     const hasKey = !!merged.apiKey
     set({ aiSettings: merged, aiConfigured: hasKey })
     if (partial.apiKey !== undefined) {
-      saveApiKeyToStore(merged.apiKey)
+      void saveApiKey(merged.apiKey)
     }
     debouncedSave()
   },
@@ -137,12 +101,12 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     debouncedSave()
   },
   setPersona: (persona) => {
-    set({ persona })
     const idx = get().activePersonaIndex
     const personas = [...get().personas]
     if (personas[idx]) {
-      personas[idx] = persona
-      set({ personas })
+      const updatedPersona = { ...persona, id: personas[idx].id }
+      personas[idx] = updatedPersona
+      set({ persona: updatedPersona, personas })
     }
     debouncedSave()
   },
@@ -169,13 +133,16 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     debouncedSave()
   },
   addPersona: (p) => {
-    const personas = [...get().personas, p]
-    set({ personas, persona: p, activePersonaIndex: personas.length - 1 })
+    const existingIds = new Set(get().personas.map((persona) => persona.id))
+    const persona = { ...p, id: p.id && !existingIds.has(p.id) ? p.id : crypto.randomUUID() }
+    const personas = [...get().personas, persona]
+    set({ personas, persona, activePersonaIndex: personas.length - 1 })
     debouncedSave()
   },
   updatePersona: (index, p) => {
     const personas = [...get().personas]
-    personas[index] = p
+    if (!personas[index]) return
+    personas[index] = { ...p, id: personas[index].id }
     const updates: Partial<{ personas: Persona[]; persona: Persona }> = { personas }
     if (index === get().activePersonaIndex) updates.persona = p
     set(updates as { personas: Persona[]; persona: Persona })
@@ -198,32 +165,25 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     debouncedSave()
   },
   loadFromStorage: async () => {
+    let legacyApiKey = ''
+    let shouldPersistNormalizedSettings = false
     try {
-      let raw = localStorage.getItem(STORAGE_KEY)
-      if (!raw) {
-        const oldRaw = localStorage.getItem('soulmate_v2_settings')
-        if (oldRaw) {
-          const old = JSON.parse(oldRaw)
-          raw = JSON.stringify({
-            aiSettings: old.aiSettings || defaultAI,
-            ttsSettings: old.ttsSettings || defaultTTS,
-            persona: old.persona || DEFAULT_PERSONA,
-            personas: [old.persona || DEFAULT_PERSONA],
-            activePersonaIndex: 0,
-          })
-        }
-      }
-      if (raw) {
-        const data = JSON.parse(raw)
-        const loadedPersonas: Persona[] = data.personas?.length ? data.personas : [{ ...DEFAULT_PERSONA }]
-        const activeIdx = data.activePersonaIndex ?? 0
+      const data = loadSettingsSnapshot()
+      if (data) {
+        shouldPersistNormalizedSettings = true
+        legacyApiKey = data.aiSettings?.apiKey || ''
+        const storedPersonas = data.personas?.length ? data.personas : [data.persona || {}]
+        const { personas: loadedPersonas, activeIndex } = normalizePersonas(
+          storedPersonas,
+          data.activePersonaIndex ?? 0,
+        )
         set({
-          aiSettings: { ...defaultAI, ...data.aiSettings },
+          aiSettings: { ...defaultAI, ...data.aiSettings, apiKey: '' },
           ttsSettings: { ...defaultTTS, ...data.ttsSettings },
-          persona: { ...DEFAULT_PERSONA, ...data.persona },
-          personas: loadedPersonas.map((p: Persona) => ({ ...DEFAULT_PERSONA, ...p })),
-          activePersonaIndex: Math.min(activeIdx, loadedPersonas.length - 1),
-          aiConfigured: !!data.aiSettings?.apiKey,
+          persona: loadedPersonas[activeIndex],
+          personas: loadedPersonas,
+          activePersonaIndex: activeIndex,
+          aiConfigured: false,
           theme: data.theme ? { ...defaultTheme, ...data.theme } : { ...defaultTheme },
           themePresetIndex: data.themePresetIndex ?? 0,
         })
@@ -233,24 +193,37 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     }
 
     try {
-      const apiKey = await loadApiKeyFromStore()
+      let storedApiKey = await loadApiKey()
+      const legacyStoreApiKey = await loadLegacyApiKey()
+      let canRemoveLegacyApiKey = !legacyApiKey
+      const migrationCandidate = storedApiKey ? '' : legacyApiKey || legacyStoreApiKey
+
+      if (migrationCandidate && (await saveApiKey(migrationCandidate))) {
+        storedApiKey = migrationCandidate
+        canRemoveLegacyApiKey = true
+        await clearLegacyApiKey()
+      } else if (storedApiKey) {
+        canRemoveLegacyApiKey = true
+        if (legacyStoreApiKey) await clearLegacyApiKey()
+      }
+
+      const apiKey = storedApiKey || migrationCandidate
       if (apiKey) {
         const current = get()
         set({
           aiSettings: { ...current.aiSettings, apiKey },
           aiConfigured: true,
         })
+      }
+      if (shouldPersistNormalizedSettings && canRemoveLegacyApiKey) {
         get().saveToStorage()
       }
     } catch {
-      /* Tauri store unavailable */
+      /* Tauri runtime or system keychain unavailable */
     }
   },
   saveToStorage: () => {
     const { aiSettings, ttsSettings, persona, personas, activePersonaIndex, theme, themePresetIndex } = get()
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({ aiSettings, ttsSettings, persona, personas, activePersonaIndex, theme, themePresetIndex }),
-    )
+    saveSettingsSnapshot({ aiSettings, ttsSettings, persona, personas, activePersonaIndex, theme, themePresetIndex })
   },
 }))

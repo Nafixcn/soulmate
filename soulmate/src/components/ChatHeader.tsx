@@ -1,6 +1,5 @@
 import React, { useState } from 'react'
 import { Persona } from '../types'
-import { WeChatLogin } from './WeChatLogin'
 import {
   Trash2,
   UserPen,
@@ -106,7 +105,6 @@ export const ChatHeader: React.FC<Props> = ({
           </div>
         </div>
       )}
-      <WeChatLogin />
       <button className="header-btn" onClick={onClearChat} title="清空">
         <Trash2 size={18} />
       </button>

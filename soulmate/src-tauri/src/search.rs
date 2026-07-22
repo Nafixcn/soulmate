@@ -43,7 +43,9 @@ pub async fn search_web(
         .header("User-Agent", "SoulMate/2.0 (Desktop App)")
         .send()
         .await
-        .map_err(|e| format!("搜索请求失败: {}", e))?;
+        .map_err(|e| format!("搜索请求失败: {}", e))?
+        .error_for_status()
+        .map_err(|e| format!("搜索请求失败: {e}"))?;
 
     let text = resp.text().await.map_err(|e| e.to_string())?;
 
@@ -56,7 +58,10 @@ pub async fn search_web(
         .map(|page| {
             let clean_snippet = strip_html(&page.snippet);
             let title = page.title;
-            let url = format!("https://zh.wikipedia.org/wiki/{}", title);
+            let url = format!(
+                "https://zh.wikipedia.org/wiki/{}",
+                urlencoding::encode(&title)
+            );
             SearchResult {
                 title,
                 snippet: clean_snippet.chars().take(300).collect(),
@@ -84,4 +89,22 @@ fn strip_html(s: &str) -> String {
         }
     }
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::strip_html;
+
+    #[test]
+    fn strips_wikipedia_highlight_tags() {
+        assert_eq!(
+            strip_html("这是<span class=\"searchmatch\">测试</span>内容"),
+            "这是测试内容"
+        );
+    }
+
+    #[test]
+    fn keeps_plain_text_unchanged() {
+        assert_eq!(strip_html("普通文本"), "普通文本");
+    }
 }
