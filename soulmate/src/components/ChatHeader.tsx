@@ -48,36 +48,36 @@ export const ChatHeader: React.FC<Props> = ({
 
   return (
     <div className="chat-header">
-      <div className="avatar">
-        {persona.avatar ? (
-          <img src={persona.avatar} className="avatar-img-header" alt="" />
-        ) : (
-          <span className="avatar-emoji">{persona.emoji}</span>
-        )}
-      </div>
-      <div
-        className="header-info"
-        onClick={() => personas.length > 1 && setShowSwitcher(!showSwitcher)}
-        style={{ cursor: personas.length > 1 ? 'pointer' : 'default' }}
-      >
-        <div className="header-name">
-          {persona.name}
+      <div className="header-profile">
+        <div className="avatar">
+          {persona.avatar ? (
+            <img src={persona.avatar} className="avatar-img-header" alt="" />
+          ) : (
+            <span className="avatar-emoji">{persona.emoji}</span>
+          )}
+        </div>
+        <div
+          className="header-info"
+          onClick={() => personas.length > 1 && setShowSwitcher(!showSwitcher)}
+          style={{ cursor: personas.length > 1 ? 'pointer' : 'default' }}
+        >
+          <div className="header-name">
+            <span className="header-name-text">{persona.name}</span>
+            {personas.length > 1 && <ChevronDown size={13} className="header-chevron" />}
+          </div>
           <span
             className="stage-tag"
-            style={{
-              background: stage.color + '30',
-              color: stage.color,
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 3,
-            }}
+            style={
+              {
+                '--stage-color': stage.color,
+              } as React.CSSProperties
+            }
           >
-            <StageIcon size={10} /> {stage.label}
+            <StageIcon size={11} /> {stage.label}
           </span>
-          {personas.length > 1 && <ChevronDown size={12} style={{ opacity: 0.7 }} />}
-        </div>
-        <div className="header-desc">
-          {persona.personality} · {persona.age}岁
+          <div className="header-desc">
+            {persona.personality} · {persona.age}岁
+          </div>
         </div>
       </div>
       {showSwitcher && (
@@ -106,17 +106,19 @@ export const ChatHeader: React.FC<Props> = ({
           </div>
         </div>
       )}
-      <button className="header-btn" onClick={onClearChat} title="清空">
+      <div className="header-actions">
+        <button className="header-btn" onClick={onEditPersona} title="编辑角色">
+          <UserPen size={18} />
+        </button>
+        <button className="header-btn" onClick={onManagePersonas} title="管理角色">
+          <UsersRound size={18} />
+        </button>
+        <button className="header-btn" onClick={onSettings} title="设置">
+          <Settings size={18} />
+        </button>
+      </div>
+      <button className="header-btn header-btn-danger" onClick={onClearChat} title="清空">
         <Trash2 size={18} />
-      </button>
-      <button className="header-btn" onClick={onEditPersona} title="编辑角色">
-        <UserPen size={18} />
-      </button>
-      <button className="header-btn" onClick={onManagePersonas} title="管理角色">
-        <UsersRound size={18} />
-      </button>
-      <button className="header-btn" onClick={onSettings} title="设置">
-        <Settings size={18} />
       </button>
     </div>
   )

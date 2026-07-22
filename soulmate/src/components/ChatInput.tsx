@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useEffect, useRef } from 'react'
 import { Send } from 'lucide-react'
 
 interface Props {
@@ -8,6 +8,14 @@ interface Props {
 
 export const ChatInput: React.FC<Props> = ({ onSend, disabled }) => {
   const [text, setText] = useState('')
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => {
+    const textarea = textareaRef.current
+    if (!textarea) return
+    textarea.style.height = 'auto'
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 132)}px`
+  }, [text])
 
   const handleSend = useCallback(() => {
     const trimmed = text.trim()
@@ -26,13 +34,15 @@ export const ChatInput: React.FC<Props> = ({ onSend, disabled }) => {
 
   return (
     <div className="chat-input-area">
-      <input
+      <textarea
+        ref={textareaRef}
         className="chat-input"
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder="输入消息..."
         disabled={disabled}
+        rows={1}
       />
       <button className="send-btn" onClick={handleSend} disabled={disabled || !text.trim()}>
         <Send size={16} />
