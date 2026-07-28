@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { Message } from '../types'
-import { invoke } from '@tauri-apps/api/core'
+import { conversationGateway } from '../services/conversationGateway'
 import { X, Search } from 'lucide-react'
 
 interface Props {
@@ -30,7 +30,7 @@ export const SearchPanel: React.FC<Props> = ({ personaId, onClose, onScrollTo })
       }
       setSearching(true)
       try {
-        const msgs = await invoke<Message[]>('search_messages', { personaId, query: q })
+        const msgs = await conversationGateway.searchMessages(personaId, q)
         if (requestSequence === requestSequenceRef.current) setResults(msgs)
       } catch (e) {
         console.error('Search failed:', e)

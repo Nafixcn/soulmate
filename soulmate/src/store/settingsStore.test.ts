@@ -19,6 +19,7 @@ import { useSettingsStore } from './settingsStore'
 
 describe('settings store persistence', () => {
   beforeEach(() => {
+    vi.useFakeTimers()
     vi.clearAllMocks()
     vi.spyOn(console, 'error').mockImplementation(() => undefined)
     mocks.hasApiKey.mockResolvedValue(false)
@@ -35,7 +36,10 @@ describe('settings store persistence', () => {
     })
   })
 
-  afterEach(() => vi.restoreAllMocks())
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+  })
 
   it('keeps a persona when its transactional deletion fails', async () => {
     const secondPersona = { ...DEFAULT_PERSONA, id: 'second', name: '小雨' }
@@ -57,6 +61,27 @@ describe('settings store persistence', () => {
 
     expect(mocks.deletePersonaData).toHaveBeenCalledOnce()
     expect(useSettingsStore.getState().personas).toEqual([{ ...DEFAULT_PERSONA }])
+  })
+
+  it('does not write an old settings snapshot while persona deletion is in flight', async () => {
+    const secondPersona = { ...DEFAULT_PERSONA, id: 'second', name: '小雨' }
+    let finishDeletion: (() => void) | undefined
+    mocks.deletePersonaData.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishDeletion = resolve
+        }),
+    )
+    useSettingsStore.setState({ personas: [{ ...DEFAULT_PERSONA }, secondPersona] })
+
+    useSettingsStore.getState().setAISettings({ temperature: 0.7 })
+    const deletion = useSettingsStore.getState().removePersona(1)
+    await vi.advanceTimersByTimeAsync(300)
+
+    expect(mocks.saveSettingsSnapshot).not.toHaveBeenCalled()
+
+    finishDeletion?.()
+    await expect(deletion).resolves.toBe(true)
   })
 
   it('loads only the keychain configuration state', async () => {

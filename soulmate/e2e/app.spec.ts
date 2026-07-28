@@ -12,6 +12,21 @@ test('stores API credentials without exposing the saved value', async ({ page })
   await expect(page.getByTitle('移除 API Key')).toBeVisible()
 })
 
+test('sends a message and completes the streamed reply', async ({ page }) => {
+  await page.goto('/')
+
+  await page.getByTitle('设置').click()
+  await page.getByPlaceholder('sk-...').fill('test-secret-key')
+  await page.getByTitle('保存 API Key').click()
+  await page.locator('.settings-header').getByRole('button').click()
+
+  await page.getByPlaceholder('输入消息...').fill('测试消息')
+  await page.getByPlaceholder('输入消息...').press('Enter')
+
+  await expect(page.locator('.user-bubble').last()).toContainText('测试消息')
+  await expect(page.locator('.ai-bubble').last()).toContainText('这是来自测试模型的回复')
+})
+
 test('creates a second persona from the always-visible manager', async ({ page }) => {
   await page.goto('/')
 

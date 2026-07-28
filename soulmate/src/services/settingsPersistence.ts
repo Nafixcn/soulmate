@@ -1,6 +1,6 @@
-import { invoke } from '@tauri-apps/api/core'
 import { load } from '@tauri-apps/plugin-store'
 import type { AISettings, Persona, ThemeColors, TTSSettings } from '../types'
+import { settingsGateway } from './settingsGateway'
 
 const STORE_PATH = 'soulmate-settings.json'
 const STORAGE_KEY = 'soulmate_v3_settings'
@@ -38,7 +38,7 @@ let storeLoading: Promise<void> | null = null
 
 export async function loadSettingsSnapshot(): Promise<LoadedSettingsSnapshot | null> {
   try {
-    const raw = await invoke<string | null>('get_settings')
+    const raw = await settingsGateway.loadSettings()
     const snapshot = parseSnapshot(raw)
     if (snapshot) return { snapshot, source: 'database' }
   } catch (error) {
@@ -64,7 +64,7 @@ export async function loadSettingsSnapshot(): Promise<LoadedSettingsSnapshot | n
 }
 
 export async function saveSettingsSnapshot(snapshot: SettingsSnapshotInput): Promise<void> {
-  await invoke('save_settings', { settingsJson: JSON.stringify(snapshot) })
+  await settingsGateway.saveSettings(JSON.stringify(snapshot))
 }
 
 export function clearLocalSettingsSnapshots(): void {
@@ -80,7 +80,7 @@ export function loadLegacyLocalApiKey(): string {
 
 export async function hasApiKey(): Promise<boolean> {
   try {
-    return await invoke<boolean>('has_api_key')
+    return await settingsGateway.hasApiKey()
   } catch {
     return false
   }
@@ -88,7 +88,7 @@ export async function hasApiKey(): Promise<boolean> {
 
 export async function saveApiKey(apiKey: string): Promise<boolean> {
   try {
-    await invoke('save_api_key', { apiKey })
+    await settingsGateway.saveApiKey(apiKey)
     return true
   } catch (error) {
     console.warn('Failed to save API key to system keychain:', error)
@@ -116,7 +116,7 @@ export async function clearLegacyApiKey(): Promise<void> {
 }
 
 export async function deletePersonaData(personaId: string, snapshot: SettingsSnapshotInput): Promise<void> {
-  await invoke('delete_persona', { personaId, settingsJson: JSON.stringify(snapshot) })
+  await settingsGateway.deletePersona(personaId, JSON.stringify(snapshot))
 }
 
 async function getStore() {

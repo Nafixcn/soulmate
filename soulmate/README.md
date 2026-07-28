@@ -4,7 +4,7 @@
 
 灵伴是一款运行在本地的 AI 女友桌面应用。你可以定制她的外貌、性格和说话风格，通过文字与她实时对话。应用支持流式输出、深度思考展示、语音朗读、关系阶段自动推进、联网知识补充，所有数据本地存储，API Key 由系统钥匙串安全保管。
 
-**技术架构**：前端基于 React 19 + TypeScript + Vite 6 + Zustand 5，后端为 Rust 编写的 Tauri 2 原生层，通过 IPC 暴露异步命令。LLM 对话采用 SSE (Server-Sent Events) 流式传输，Rust 侧使用 `reqwest` 发起 HTTP 流式请求并以 `tokio` channel 桥接至前端。数据持久化使用 SQLite (WAL 模式)，通过 `rusqlite` 绑定实现 ORM-free 的 DAO 层，支持游标分页、全文搜索、schema 迁移和 v1→v2 旧版兼容。API Key 通过 `keyring` crate 写入操作系统钥匙串（macOS Keychain），全程无明文落地。
+**技术架构**：前端基于 React 19 + TypeScript + Vite 8 + Zustand 5，后端为 Rust 编写的 Tauri 2 原生层，通过 IPC 暴露异步命令。LLM 对话采用 SSE (Server-Sent Events) 流式传输，Rust 侧使用 `reqwest` 发起 HTTP 流式请求并以 `tokio` channel 桥接至前端。数据持久化使用 SQLite (WAL 模式)，通过 `rusqlite` 绑定实现 ORM-free 的 DAO 层，支持游标分页、全文搜索、schema 迁移和 v1→v2 旧版兼容。API Key 通过 `keyring` crate 写入操作系统钥匙串（macOS Keychain），全程无明文落地。
 
 ## 功能
 
@@ -29,7 +29,7 @@
 | 层 | 技术 |
 |---|---|
 | 桌面框架 | Tauri v2 |
-| 前端 | React 19 + TypeScript + Vite 6 |
+| 前端 | React 19 + TypeScript + Vite 8 |
 | UI 图标 | Lucide React |
 | 状态管理 | Zustand 5 |
 | Markdown | react-markdown + remark-gfm |
@@ -44,7 +44,7 @@
 
 ### 前置要求
 
-- Node.js ≥ 18
+- Node.js ≥ 22.12
 - Rust toolchain (stable)
 - macOS: Xcode Command Line Tools
 
@@ -116,10 +116,13 @@ soulmate/
 │   │   ├── chatStore.ts       # 聊天/消息/流式状态
 │   │   └── settingsStore.ts   # 设置/角色/主题状态
 │   ├── services/              # 服务层
-│   │   ├── conversationService.ts  # 系统 prompt 组装
+│   │   ├── conversationGateway.ts  # 消息、流式 AI 与搜索 IPC adapter
+│   │   ├── conversationTurn.ts     # 完整对话轮次编排、重试与回复持久化
+│   │   ├── conversationService.ts  # 系统 prompt 与知识检索组装
 │   │   ├── greetingService.ts      # 每日问候调度
 │   │   ├── chatExport.ts           # Markdown 导出
 │   │   ├── ttsService.ts           # Web Speech API 封装
+│   │   ├── settingsGateway.ts      # 设置与钥匙串 IPC adapter
 │   │   └── settingsPersistence.ts  # 持久化与迁移
 │   ├── domain/                # 领域逻辑
 │   │   ├── conversation.ts    # Prompt 构建、表情检测

@@ -18,6 +18,11 @@ import { AlertTriangle, Search, Download } from 'lucide-react'
 
 const petalCount = 12
 
+function petalRandom(index: number, salt: number): number {
+  const value = Math.sin((index + 1) * (salt + 1) * 12.9898) * 43758.5453
+  return value - Math.floor(value)
+}
+
 export const ChatWindow: React.FC = () => {
   const messages = useChatStore((s) => s.messages)
   const isTyping = useChatStore((s) => s.isTyping)
@@ -58,11 +63,11 @@ export const ChatWindow: React.FC = () => {
   const [petals] = useMemo(() => {
     const arr = Array.from({ length: petalCount }, (_, i) => ({
       id: i,
-      left: Math.random() * 100,
-      delay: Math.random() * 12,
-      duration: 8 + Math.random() * 10,
-      size: 14 + Math.random() * 14,
-      emoji: theme.petals[Math.floor(Math.random() * theme.petals.length)],
+      left: petalRandom(i, 0) * 100,
+      delay: petalRandom(i, 1) * 12,
+      duration: 8 + petalRandom(i, 2) * 10,
+      size: 14 + petalRandom(i, 3) * 14,
+      emoji: theme.petals[Math.floor(petalRandom(i, 4) * theme.petals.length)],
     }))
     return [arr] as const
   }, [theme.petals])

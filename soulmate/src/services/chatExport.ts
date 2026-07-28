@@ -1,5 +1,5 @@
-import { invoke } from '@tauri-apps/api/core'
 import type { Message } from '../types'
+import { conversationGateway } from './conversationGateway'
 
 export function buildChatTranscript(messages: Message[], personaName: string, exportedAt = new Date()): string {
   const lines = messages.map((message) => {
@@ -25,6 +25,6 @@ export function downloadChatTranscript(messages: Message[], personaName: string)
 }
 
 export async function exportFullChatTranscript(personaId: string, personaName: string): Promise<void> {
-  const messages = await invoke<Message[]>('get_all_messages', { personaId })
+  const messages = await conversationGateway.getAllMessages(personaId)
   downloadChatTranscript(messages, personaName)
 }

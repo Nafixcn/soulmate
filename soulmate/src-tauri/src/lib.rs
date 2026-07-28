@@ -4,7 +4,6 @@ mod ai;
 mod credentials;
 mod db;
 mod search;
-// mod speech; — disabled: ObjC FFI causes SIGBUS on macOS 26
 
 use dashmap::DashMap;
 use std::sync::Mutex;
@@ -19,7 +18,6 @@ pub struct AppState {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .setup(|app| {
             let app_dir = app.path().app_data_dir().expect("无法获取应用数据目录");

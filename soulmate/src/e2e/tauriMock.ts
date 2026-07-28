@@ -1,5 +1,5 @@
 import { mockIPC } from '@tauri-apps/api/mocks'
-import type { Message, MessagePage } from '../types'
+import type { AiChunk, Message, MessagePage } from '../types'
 
 const historicalMessages: Message[] = [
   { id: 'old-message', role: 'user', content: '记得那场电影吗', timestamp: 1 },
@@ -39,6 +39,16 @@ export function setupTauriMock(): void {
         return page(historicalMessages)
       case 'get_all_messages':
         return historicalMessages
+      case 'save_message':
+        return null
+      case 'send_message': {
+        const channel = args.onChunk as { onmessage: (chunk: AiChunk) => void }
+        queueMicrotask(() => {
+          channel.onmessage({ content: '这是来自测试模型的回复', thinking: '', done: false })
+          channel.onmessage({ content: '', thinking: '', done: true })
+        })
+        return null
+      }
       case 'clear_messages':
       case 'delete_persona':
         return null

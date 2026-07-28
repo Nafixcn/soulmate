@@ -1,13 +1,11 @@
 import { create } from 'zustand'
-import { Message, Expression, AISettings, TTSSettings, AiChunk, Persona, MessagePage } from '../types'
-import { Channel, invoke } from '@tauri-apps/api/core'
-import { speak, stopSpeaking } from '../services/ttsService'
-import { prepareConversation } from '../services/conversationService'
+import { Message, Expression, AISettings, TTSSettings, Persona } from '../types'
+import { stopSpeaking } from '../services/ttsService'
 import { useSettingsStore } from './settingsStore'
-import { detectExpression, findRegenerationTurn, type ApiMessage } from '../domain/conversation'
+import { detectExpression, findRegenerationTurn } from '../domain/conversation'
+import { conversationGateway } from '../services/conversationGateway'
+import { runConversationTurn } from '../services/conversationTurn'
 
-const MAX_RETRIES = 2
-const RETRY_DELAY_MS = 1500
 const PAGE_SIZE = 100
 
 interface ChatStore {
@@ -49,7 +47,7 @@ async function cancelCurrent(state: ChatStore) {
   }
   if (state.requestId) {
     try {
-      await invoke('cancel_request', { requestId: state.requestId })
+      await conversationGateway.cancelRequest(state.requestId)
     } catch {
       /* request already finished */
     }
@@ -92,7 +90,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       ...resetCancelState(),
     })
     try {
-      const page = await invoke<MessagePage>('get_messages', { personaId, limit: PAGE_SIZE })
+      const page = await conversationGateway.getMessages(personaId, PAGE_SIZE)
       if (get().activePersonaId !== personaId) return
       set({
         messages: page.messages,
@@ -112,11 +110,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     if (isLoadingMore || messages.length === 0) return
     set({ isLoadingMore: true })
     try {
-      const page = await invoke<MessagePage>('get_messages', {
-        personaId: activePersonaId,
-        limit: PAGE_SIZE,
-        beforeId: messages[0].id,
-      })
+      const page = await conversationGateway.getMessages(activePersonaId, PAGE_SIZE, messages[0].id)
       if (get().activePersonaId !== activePersonaId) return
       if (page.messages.length > 0) {
         set({ messages: [...page.messages, ...messages], hasMore: page.hasMore, userMsgCount: page.userMessageCount })
@@ -135,7 +129,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     if (get().messages.some((message) => message.id === messageId)) return true
     set({ isLoadingConversation: true })
     try {
-      const page = await invoke<MessagePage>('get_messages_from', { personaId, messageId })
+      const page = await conversationGateway.getMessagesFrom(personaId, messageId)
       if (get().activePersonaId !== personaId || page.messages.length === 0) return false
       set({
         messages: page.messages,
@@ -186,42 +180,30 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     })
 
     try {
-      await invoke('save_message', { personaId: persona.id, message: userMsg })
+      await conversationGateway.saveMessage(persona.id, userMsg)
     } catch (e) {
       console.error('Failed to save user message:', e)
       set({ error: '消息保存失败，重启后可能丢失' })
     }
 
-    const allMessages = [...state.messages, userMsg]
-    const apiMessages = await prepareConversation({
-      messages: allMessages,
-      persona,
-      query: content,
-      useKnowledgeRetrieval: aiSettings.useWebSearch,
-    })
-
-    let lastError: string | null = null
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const completed = await completeConversationTurn({
+        messages: [...state.messages, userMsg],
+        query: content,
+        persona,
+        aiSettings,
+        ttsSettings,
+        requestId: reqId,
+        controller,
+      })
+      if (completed) void maybeEvaluateRelation(persona, aiSettings)
+    } catch (error: unknown) {
       if (controller.signal.aborted) return
-      if (attempt > 0) {
-        await new Promise((r) => setTimeout(r, RETRY_DELAY_MS * attempt))
-      }
-      try {
-        await doStream(apiMessages, aiSettings, reqId, controller, ttsSettings, persona.id)
-        if (controller.signal.aborted) return
-        maybeEvaluateRelation(persona, aiSettings)
-        return
-      } catch (error: unknown) {
-        if (controller.signal.aborted) return
-        lastError = error instanceof Error ? error.message : '发送失败'
-        if (attempt < MAX_RETRIES) continue
-      }
+      set({
+        ...resetCancelState(),
+        error: error instanceof Error ? error.message : '发送失败，请检查网络和API设置',
+      })
     }
-
-    set({
-      ...resetCancelState(),
-      error: lastError || '发送失败，请检查网络和API设置',
-    })
   },
 
   deleteFrom: async (fromMessageId: string) => {
@@ -229,10 +211,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     const state = get()
     await cancelCurrent(state)
     try {
-      const userMsgCount = await invoke<number>('delete_messages_from', {
-        personaId: state.activePersonaId,
-        fromMessageId,
-      })
+      const userMsgCount = await conversationGateway.deleteMessagesFrom(state.activePersonaId, fromMessageId)
       set((current) => {
         if (current.activePersonaId !== state.activePersonaId) return {}
         const targetIndex = current.messages.findIndex((message) => message.id === fromMessageId)
@@ -261,14 +240,6 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     if (!(await state.deleteFrom(turn.assistantMessage.id))) return
     if (get().activePersonaId !== persona.id) return
 
-    const remaining = get().messages
-    const apiMessages = await prepareConversation({
-      messages: remaining,
-      persona,
-      query: triggerUserMsg.content,
-      useKnowledgeRetrieval: aiSettings.useWebSearch,
-    })
-
     const controller = new AbortController()
     const reqId = crypto.randomUUID()
     set({
@@ -282,9 +253,16 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     })
 
     try {
-      await doStream(apiMessages, aiSettings, reqId, controller, ttsSettings, persona.id)
-      if (controller.signal.aborted) return
-      maybeEvaluateRelation(persona, aiSettings)
+      const completed = await completeConversationTurn({
+        messages: get().messages,
+        query: triggerUserMsg.content,
+        persona,
+        aiSettings,
+        ttsSettings,
+        requestId: reqId,
+        controller,
+      })
+      if (completed) void maybeEvaluateRelation(persona, aiSettings)
     } catch (error: unknown) {
       if (controller.signal.aborted) return
       set({
@@ -299,7 +277,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     const state = get()
     await cancelCurrent(state)
     try {
-      await invoke('clear_messages', { personaId: state.activePersonaId })
+      await conversationGateway.clearMessages(state.activePersonaId)
       if (get().activePersonaId === state.activePersonaId) {
         set({ messages: [], userMsgCount: 0, expression: 'neutral', error: null, ...resetCancelState() })
       }
@@ -312,92 +290,54 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   },
 }))
 
-async function doStream(
-  apiMessages: ApiMessage[],
-  aiSettings: AISettings,
-  reqId: string,
-  controller: AbortController,
-  ttsSettings: TTSSettings,
-  personaId: string,
-) {
-  const onChunk = new Channel<AiChunk>()
-  let fullContent = ''
-  let fullThinking = ''
-  let resolveCompleted: () => void = () => {}
-  const completed = new Promise<void>((resolve) => {
-    resolveCompleted = resolve
+interface CompleteConversationTurnOptions {
+  messages: Message[]
+  query: string
+  persona: Persona
+  aiSettings: AISettings
+  ttsSettings: TTSSettings
+  requestId: string
+  controller: AbortController
+}
+
+async function completeConversationTurn(options: CompleteConversationTurnOptions): Promise<boolean> {
+  const result = await runConversationTurn({
+    ...options,
+    signal: options.controller.signal,
+    isCurrent: () => useChatStore.getState().activePersonaId === options.persona.id,
+    onChunk: (streamingContent, streamingThinking) => useChatStore.setState({ streamingContent, streamingThinking }),
+    onSpeakingChange: (isSpeaking) => useChatStore.setState({ isSpeaking }),
   })
+  if (!result) return false
 
-  onChunk.onmessage = (chunk) => {
-    if (chunk.done) resolveCompleted()
-    if (controller.signal.aborted || useChatStore.getState().activePersonaId !== personaId || chunk.done) return
-
-    fullContent += chunk.content
-    fullThinking += chunk.thinking
-    useChatStore.setState({ streamingContent: fullContent, streamingThinking: fullThinking })
-  }
-
-  await Promise.all([
-    invoke('send_message', {
-      messagesJson: JSON.stringify(apiMessages),
-      endpoint: aiSettings.endpoint,
-      model: aiSettings.model,
-      temperature: aiSettings.temperature,
-      maxTokens: aiSettings.maxTokens,
-      requestId: reqId,
-      onChunk,
-    }),
-    completed,
-  ])
-
-  if (controller.signal.aborted || useChatStore.getState().activePersonaId !== personaId) return
-
-  const aiMsg: Message = {
-    id: crypto.randomUUID(),
-    role: 'assistant',
-    content: fullContent || '...',
-    thinking: fullThinking || undefined,
-    timestamp: Date.now(),
-  }
-  let persistenceError: string | null = null
-  try {
-    await invoke('save_message', { personaId, message: aiMsg })
-  } catch (error) {
-    console.error('Failed to save AI message:', error)
-    persistenceError = '回复已生成，但保存失败，重启后可能丢失'
-  }
-
+  const fullContent = result.message.content
   useChatStore.setState((state) =>
-    state.activePersonaId === personaId
+    state.activePersonaId === options.persona.id
       ? {
-          messages: [...state.messages, aiMsg],
+          messages: [...state.messages, result.message],
           isTyping: false,
           streamingContent: '',
           streamingThinking: '',
           expression: detectExpression(fullContent),
           abortController: null,
           requestId: null,
-          error: persistenceError,
+          error: result.persistenceError,
         }
       : state,
   )
-
-  if (ttsSettings.autoPlay && ttsSettings.enabled) {
-    useChatStore.setState({ isSpeaking: true })
-    void speak(fullContent, ttsSettings).finally(() => useChatStore.setState({ isSpeaking: false }))
-  }
 
   const capturedContent = fullContent
   setTimeout(() => {
     const currentState = useChatStore.getState()
     if (
-      currentState.activePersonaId === personaId &&
+      currentState.activePersonaId === options.persona.id &&
       currentState.expression !== 'neutral' &&
       currentState.expression === detectExpression(capturedContent)
     ) {
       useChatStore.setState({ expression: 'neutral' })
     }
   }, 5000)
+  return true
 }
 
 const STAGE_ORDER = ['刚认识', '朋友', '暧昧', '热恋', '老夫老妻']
@@ -411,7 +351,7 @@ async function maybeEvaluateRelation(persona: Persona, aiSettings: AISettings) {
   if (state.userMsgCount % interval !== 0) return
 
   const msgs = state.messages.slice(-60)
-  const evalMsgs: { role: string; content: string }[] = []
+  const evalMsgs: Array<Pick<Message, 'role' | 'content'>> = []
   for (let i = 0; i < msgs.length; i++) {
     const m = msgs[i]
     if (i < msgs.length - 1) {
@@ -420,11 +360,7 @@ async function maybeEvaluateRelation(persona: Persona, aiSettings: AISettings) {
   }
 
   try {
-    const result: string = await invoke('evaluate_relationship', {
-      endpoint: aiSettings.endpoint,
-      model: aiSettings.model,
-      messagesJson: JSON.stringify(evalMsgs),
-    })
+    const result = await conversationGateway.evaluateRelationship(aiSettings, evalMsgs)
 
     const detected = result.trim()
     if (useChatStore.getState().activePersonaId !== persona.id) return
@@ -451,7 +387,7 @@ async function maybeEvaluateRelation(persona: Persona, aiSettings: AISettings) {
         content: greeting,
         timestamp: Date.now(),
       }
-      await invoke('save_message', { personaId: persona.id, message: notifyMsg })
+      await conversationGateway.saveMessage(persona.id, notifyMsg)
       useChatStore.setState((state) => ({ messages: [...state.messages, notifyMsg] }))
 
       if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {

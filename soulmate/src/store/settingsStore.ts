@@ -71,6 +71,8 @@ const defaultTheme: ThemeColors = {
 }
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null
+let persistenceBlockCount = 0
+let saveRequestedWhileBlocked = false
 
 function snapshotFromState(state: SettingsStore): SettingsSnapshotInput {
   return {
@@ -88,8 +90,29 @@ function debouncedSave() {
   if (saveTimer) clearTimeout(saveTimer)
   saveTimer = setTimeout(() => {
     saveTimer = null
+    if (persistenceBlockCount > 0) {
+      saveRequestedWhileBlocked = true
+      return
+    }
     void useSettingsStore.getState().saveToStorage()
   }, 300)
+}
+
+function blockDebouncedPersistence() {
+  persistenceBlockCount++
+  if (saveTimer) {
+    clearTimeout(saveTimer)
+    saveTimer = null
+    saveRequestedWhileBlocked = true
+  }
+}
+
+function resumeDebouncedPersistence() {
+  persistenceBlockCount = Math.max(0, persistenceBlockCount - 1)
+  if (persistenceBlockCount === 0 && saveRequestedWhileBlocked) {
+    saveRequestedWhileBlocked = false
+    debouncedSave()
+  }
 }
 
 export const useSettingsStore = create<SettingsStore>((set, get) => ({
@@ -180,6 +203,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     const persona = personas[activePersonaIndex]
     const nextState = { ...state, personas, persona, activePersonaIndex }
 
+    blockDebouncedPersistence()
     try {
       await deletePersonaData(removedPersona.id, snapshotFromState(nextState))
       set({ personas, persona, activePersonaIndex, persistenceError: null })
@@ -188,6 +212,8 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
       console.error('Failed to delete persona:', error)
       set({ persistenceError: '角色删除失败，聊天记录未被修改' })
       return false
+    } finally {
+      resumeDebouncedPersistence()
     }
   },
   switchPersona: (index) => {

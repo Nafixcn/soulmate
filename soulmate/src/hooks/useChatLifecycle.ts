@@ -1,7 +1,7 @@
 import { useCallback, useEffect } from 'react'
-import { invoke } from '@tauri-apps/api/core'
 import { useChatStore } from '../store/chatStore'
 import { scheduleDailyGreetings } from '../services/greetingService'
+import { conversationGateway } from '../services/conversationGateway'
 import type { Message } from '../types'
 
 const INITIAL_GREETING = '你好呀~今天想聊点什么呢？'
@@ -27,7 +27,7 @@ export function useChatLifecycle({ personaId, error, clearError, loadMessages }:
         state.activePersonaId === personaId ? { messages: [...state.messages, message] } : state,
       )
       try {
-        await invoke('save_message', { personaId, message })
+        await conversationGateway.saveMessage(personaId, message)
       } catch (saveError) {
         console.error('Failed to save greeting:', saveError)
       }

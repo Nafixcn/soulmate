@@ -1,4 +1,3 @@
-import { invoke } from '@tauri-apps/api/core'
 import type { Message, Persona } from '../types'
 import {
   buildConversationMessages,
@@ -6,6 +5,7 @@ import {
   type ApiMessage,
   type KnowledgeResult,
 } from '../domain/conversation'
+import { conversationGateway } from './conversationGateway'
 
 interface PrepareConversationOptions {
   messages: Message[]
@@ -24,7 +24,7 @@ export async function prepareConversation({
 
   if (useKnowledgeRetrieval && shouldRetrieveKnowledge(query)) {
     try {
-      knowledgeResults = await invoke<KnowledgeResult[]>('search_web', { query })
+      knowledgeResults = await conversationGateway.searchKnowledge(query)
     } catch {
       // Retrieval is optional; the conversation should continue without it.
     }
