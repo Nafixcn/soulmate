@@ -1,4 +1,11 @@
-import type { AISettings, Message, Persona, TTSSettings } from '../types'
+import {
+  DEFAULT_USER_PROFILE,
+  type AISettings,
+  type Message,
+  type Persona,
+  type TTSSettings,
+  type UserProfile,
+} from '../types'
 import { prepareConversation } from './conversationService'
 import { conversationGateway } from './conversationGateway'
 import { speak } from './ttsService'
@@ -12,6 +19,7 @@ interface ConversationTurnOptions {
   persona: Persona
   aiSettings: AISettings
   ttsSettings: TTSSettings
+  userProfile?: UserProfile
   requestId: string
   signal: AbortSignal
   isCurrent: () => boolean
@@ -30,6 +38,8 @@ export async function runConversationTurn(options: ConversationTurnOptions): Pro
     persona: options.persona,
     query: options.query,
     useKnowledgeRetrieval: options.aiSettings.useWebSearch,
+    useMemory: options.aiSettings.memoryEnabled !== false,
+    userProfile: options.userProfile || DEFAULT_USER_PROFILE,
   })
 
   let lastError: unknown

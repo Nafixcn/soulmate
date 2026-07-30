@@ -5,6 +5,7 @@ import { useSettingsStore } from './settingsStore'
 import { detectExpression, findRegenerationTurn } from '../domain/conversation'
 import { conversationGateway } from '../services/conversationGateway'
 import { runConversationTurn } from '../services/conversationTurn'
+import { memoryService } from '../services/memoryService'
 
 const PAGE_SIZE = 100
 
@@ -196,7 +197,10 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         requestId: reqId,
         controller,
       })
-      if (completed) void evaluateRelationshipProgress(persona, aiSettings)
+      if (completed) {
+        void evaluateRelationshipProgress(persona, aiSettings)
+        void extractConversationMemories(persona, aiSettings)
+      }
     } catch (error: unknown) {
       if (controller.signal.aborted) return
       set({
@@ -262,7 +266,10 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         requestId: reqId,
         controller,
       })
-      if (completed) void evaluateRelationshipProgress(persona, aiSettings)
+      if (completed) {
+        void evaluateRelationshipProgress(persona, aiSettings)
+        void extractConversationMemories(persona, aiSettings)
+      }
     } catch (error: unknown) {
       if (controller.signal.aborted) return
       set({
@@ -303,6 +310,7 @@ interface CompleteConversationTurnOptions {
 async function completeConversationTurn(options: CompleteConversationTurnOptions): Promise<boolean> {
   const result = await runConversationTurn({
     ...options,
+    userProfile: useSettingsStore.getState().userProfile,
     signal: options.controller.signal,
     isCurrent: () => useChatStore.getState().activePersonaId === options.persona.id,
     onChunk: (streamingContent, streamingThinking) => useChatStore.setState({ streamingContent, streamingThinking }),
@@ -342,6 +350,20 @@ async function completeConversationTurn(options: CompleteConversationTurnOptions
 
 const STAGE_ORDER = ['刚认识', '朋友', '暧昧', '热恋', '老夫老妻']
 
+async function extractConversationMemories(persona: Persona, aiSettings: AISettings) {
+  if (aiSettings.memoryEnabled === false) return
+  const state = useChatStore.getState()
+  if (state.activePersonaId !== persona.id) return
+  const interval = Math.max(1, aiSettings.memoryExtractionInterval || 6)
+  if (state.userMsgCount % interval !== 0) return
+
+  try {
+    await memoryService.extract(persona.id, aiSettings, state.messages)
+  } catch (error) {
+    console.warn('Failed to extract conversation memories:', error)
+  }
+}
+
 export async function evaluateRelationshipProgress(persona: Persona, aiSettings: AISettings) {
   if (!aiSettings.autoProgress) return
 
@@ -362,7 +384,7 @@ export async function evaluateRelationshipProgress(persona: Persona, aiSettings:
   try {
     const result = await conversationGateway.evaluateRelationship(aiSettings, evalMsgs)
 
-    const detected = result.trim()
+    const detected = result.stage.trim()
     if (useChatStore.getState().activePersonaId !== persona.id) return
     const settingsState = useSettingsStore.getState()
     const currentPersona = settingsState.personas.find((candidate) => candidate.id === persona.id)
@@ -382,7 +404,8 @@ export async function evaluateRelationshipProgress(persona: Persona, aiSettings:
         老夫老妻: '🏡 老夫老妻般的默契',
       }
 
-      const greeting = levelNames[newStage] || `💕 关系升级：${newStage}`
+      const milestone = levelNames[newStage] || `💕 关系升级：${newStage}`
+      const greeting = result.reason ? `${milestone}\n\n${result.reason}` : milestone
       const notifyMsg = {
         id: crypto.randomUUID(),
         role: 'assistant' as const,

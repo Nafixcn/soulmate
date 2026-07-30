@@ -6,6 +6,20 @@ export interface Message {
   timestamp: number
 }
 
+export type MemoryCategory = 'profile' | 'preference' | 'event' | 'boundary'
+
+export interface Memory {
+  id: string
+  personaId: string
+  category: MemoryCategory
+  content: string
+  sourceMessageId?: string
+  confidence: number
+  pinned: boolean
+  createdAt: number
+  updatedAt: number
+}
+
 export interface Persona {
   id: string
   name: string
@@ -21,6 +35,14 @@ export interface Persona {
   avatar: string
 }
 
+export interface UserProfile {
+  name: string
+  preferredAddress: string
+  relationshipLabel: string
+  interests: string
+  boundaries: string
+}
+
 export type Expression = 'neutral' | 'happy' | 'shy' | 'loving' | 'surprised' | 'thinking'
 
 export interface AISettings {
@@ -31,6 +53,15 @@ export interface AISettings {
   autoProgress: boolean
   evalInterval: number
   useWebSearch: boolean
+  memoryEnabled?: boolean
+  memoryExtractionInterval?: number
+}
+
+export interface GreetingSettings {
+  enabled: boolean
+  dailyCount: number
+  quietStart: number
+  quietEnd: number
 }
 
 export interface MessagePage {
@@ -205,4 +236,12 @@ export const DEFAULT_PERSONA: Persona = {
   hairColor: '#ff9fbf',
   eyeColor: '#ff6b9d',
   avatar: '',
+}
+
+export const DEFAULT_USER_PROFILE: UserProfile = {
+  name: '',
+  preferredAddress: '你',
+  relationshipLabel: '伴侣',
+  interests: '',
+  boundaries: '',
 }

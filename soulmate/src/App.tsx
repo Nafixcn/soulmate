@@ -5,12 +5,14 @@ import { AppLockScreen } from './components/AppLockScreen'
 import { useSettingsStore } from './store/settingsStore'
 import { takeStartupWarning } from './services/dataPortability'
 import { appLock } from './services/appLock'
+import { Onboarding } from './components/Onboarding'
 
 type LockStatus = 'checking' | 'locked' | 'unlocked' | 'unavailable'
 
 const App: React.FC = () => {
   const loadFromStorage = useSettingsStore((s) => s.loadFromStorage)
   const theme = useSettingsStore((s) => s.theme)
+  const onboardingCompleted = useSettingsStore((s) => s.onboardingCompleted)
   const [ready, setReady] = useState(false)
   const [lockStatus, setLockStatus] = useState<LockStatus>('checking')
 
@@ -78,6 +80,7 @@ const App: React.FC = () => {
       />
     )
   }
+  if (!onboardingCompleted) return <Onboarding />
   return (
     <ErrorBoundary>
       <ChatWindow />

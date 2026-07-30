@@ -1,4 +1,4 @@
-import type { Expression, Message, Persona } from '../types'
+import type { Expression, Memory, Message, Persona, UserProfile } from '../types'
 
 export interface ApiMessage {
   role: 'system' | Message['role']
@@ -57,18 +57,51 @@ export function shouldRetrieveKnowledge(content: string): boolean {
   return KNOWLEDGE_QUERY_PATTERN.test(content)
 }
 
+export function selectRelevantMemories(memories: Memory[], query: string, limit = 6): Memory[] {
+  if (limit <= 0) return []
+
+  const queryTokens = textTokens(query)
+  return memories
+    .map((memory) => {
+      const overlap = [...textTokens(memory.content)].filter((token) => queryTokens.has(token)).length
+      const score = (memory.pinned ? 10_000 : 0) + overlap * 100 + memory.confidence * 10 + memory.updatedAt / 1e13
+      return { memory, score }
+    })
+    .filter(({ memory, score }) => memory.pinned || score >= 100)
+    .sort((left, right) => right.score - left.score)
+    .slice(0, limit)
+    .map(({ memory }) => memory)
+}
+
 export function buildConversationMessages(
   messages: Message[],
   persona: Persona,
   knowledgeResults: KnowledgeResult[] = [],
+  memories: Memory[] = [],
+  userProfile?: UserProfile,
 ): ApiMessage[] {
   const contextMessages = messages.slice(-CONTEXT_WINDOW)
-  const systemPrompt = appendKnowledgeContext(buildSystemPrompt(persona), knowledgeResults)
+  const systemPrompt = appendKnowledgeContext(
+    appendMemoryContext(buildSystemPrompt(persona, userProfile), memories),
+    knowledgeResults,
+  )
 
   return [
     { role: 'system', content: systemPrompt },
     ...contextMessages.map((message) => ({ role: message.role, content: message.content })),
   ]
+}
+
+function textTokens(text: string): Set<string> {
+  const normalized = text.toLocaleLowerCase().replace(/\s+/g, '')
+  const tokens = new Set<string>()
+  for (let index = 0; index < normalized.length - 1; index++) {
+    tokens.add(normalized.slice(index, index + 2))
+  }
+  for (const word of text.toLocaleLowerCase().match(/[a-z0-9]{2,}|[\p{Script=Han}]{2,}/gu) || []) {
+    tokens.add(word)
+  }
+  return tokens
 }
 
 export function detectExpression(text: string): Expression {
@@ -91,12 +124,18 @@ function findAssistantIndex(messages: Message[], assistantMessageId?: string): n
   return -1
 }
 
-function buildSystemPrompt(persona: Persona): string {
+function buildSystemPrompt(persona: Persona, userProfile?: UserProfile): string {
   const personalityDescription = PERSONALITY_TIPS[persona.personality] || '温柔体贴'
-  const nickname = persona.nickname || '哥哥'
+  const nickname = userProfile?.preferredAddress.trim() || persona.nickname || '你'
+  const relationshipLabel = userProfile?.relationshipLabel.trim() || '伴侣'
+  const userContext = userProfile
+    ? `对方叫${userProfile.name.trim() || nickname}，你们的关系是${relationshipLabel}。称呼对方为“${nickname}”。${
+        userProfile.interests.trim() ? `对方的兴趣：${userProfile.interests.trim()}。` : ''
+      }${userProfile.boundaries.trim() ? `交流边界：${userProfile.boundaries.trim()}。` : ''}`
+    : `跟${relationshipLabel}聊天中。称呼对方为“${nickname}”。`
 
   return `你是${persona.name}，${persona.age}岁，性格${persona.personality}（${personalityDescription}）。
-跟男朋友聊天中。爱好：${persona.hobby}。说话风格：${persona.speakingStyle}。称呼对方：${nickname}。${RELATIONSHIP_TIPS[persona.relationshipStage]}
+${userContext}你的爱好：${persona.hobby}。说话风格：${persona.speakingStyle}。${RELATIONSHIP_TIPS[persona.relationshipStage]}
 
 【禁止事项 - 极其重要】
 1. 绝对不编造故事、经历、事实、新闻、数据
@@ -110,6 +149,12 @@ function buildSystemPrompt(persona: Persona): string {
 - 2-4句自然口语中文
 - 严格按你的人设说话
 - 用"${nickname}"称呼对方${persona.emoji}`
+}
+
+function appendMemoryContext(systemPrompt: string, memories: Memory[]): string {
+  if (memories.length === 0) return systemPrompt
+  const context = memories.map((memory) => `- ${memory.content}`).join('\n')
+  return `${systemPrompt}\n\n【用户确认或明确表达的长期记忆】\n${context}\n仅在相关时自然参考，不要声称拥有记忆中没有的经历。`
 }
 
 function appendKnowledgeContext(systemPrompt: string, results: KnowledgeResult[]): string {

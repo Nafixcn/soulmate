@@ -107,10 +107,10 @@ describe('chat store persistence consistency', () => {
   })
 
   it('preserves persona edits made while relationship evaluation is in flight', async () => {
-    let resolveEvaluation: ((value: string) => void) | undefined
+    let resolveEvaluation: ((value: { stage: string; reason: string }) => void) | undefined
     mocks.invoke.mockImplementation((command: string) =>
       command === 'evaluate_relationship'
-        ? new Promise<string>((resolve) => {
+        ? new Promise<{ stage: string; reason: string }>((resolve) => {
             resolveEvaluation = resolve
           })
         : Promise.resolve(undefined),
@@ -129,7 +129,7 @@ describe('chat store persistence consistency', () => {
 
     const evaluation = evaluateRelationshipProgress(originalPersona, aiSettings)
     useSettingsStore.getState().setPersona({ ...originalPersona, name: '刚刚修改的新名字' })
-    resolveEvaluation?.('朋友')
+    resolveEvaluation?.({ stage: '朋友', reason: '开始自然分享日常' })
     await evaluation
 
     expect(useSettingsStore.getState().persona).toMatchObject({

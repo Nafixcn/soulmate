@@ -1,8 +1,8 @@
 import { useCallback, useEffect } from 'react'
 import { useChatStore } from '../store/chatStore'
-import { scheduleDailyGreetings } from '../services/greetingService'
+import { buildGroundedGreeting, scheduleDailyGreetings, showGreetingNotification } from '../services/greetingService'
 import { conversationGateway } from '../services/conversationGateway'
-import type { Message } from '../types'
+import type { GreetingSettings, Message } from '../types'
 
 const INITIAL_GREETING = '你好呀~今天想聊点什么呢？'
 
@@ -11,9 +11,20 @@ interface ChatLifecycleOptions {
   error: string | null
   clearError: () => void
   loadMessages: (personaId: string) => Promise<void>
+  preferredAddress: string
+  interests: string
+  greetingSettings: GreetingSettings
 }
 
-export function useChatLifecycle({ personaId, error, clearError, loadMessages }: ChatLifecycleOptions): void {
+export function useChatLifecycle({
+  personaId,
+  error,
+  clearError,
+  loadMessages,
+  preferredAddress,
+  interests,
+  greetingSettings,
+}: ChatLifecycleOptions): void {
   const addGreeting = useCallback(
     async (content: string) => {
       const message: Message = {
@@ -55,5 +66,16 @@ export function useChatLifecycle({ personaId, error, clearError, loadMessages }:
     return () => clearTimeout(timerId)
   }, [error, clearError])
 
-  useEffect(() => scheduleDailyGreetings((greeting) => void addGreeting(greeting)), [addGreeting])
+  useEffect(
+    () =>
+      scheduleDailyGreetings(greetingSettings, () => {
+        const state = useChatStore.getState()
+        if (state.activePersonaId !== personaId) return
+        const lastUserMessage = [...state.messages].reverse().find((message) => message.role === 'user')?.content
+        const greeting = buildGroundedGreeting({ preferredAddress, interests, lastUserMessage })
+        void addGreeting(greeting)
+        showGreetingNotification(greeting)
+      }),
+    [addGreeting, greetingSettings, interests, personaId, preferredAddress],
+  )
 }

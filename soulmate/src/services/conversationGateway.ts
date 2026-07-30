@@ -16,6 +16,11 @@ export interface CompletionResult {
   thinking: string
 }
 
+export interface RelationshipEvaluation {
+  stage: string
+  reason: string
+}
+
 export const conversationGateway = {
   getMessages(personaId: string, limit: number, beforeId?: string): Promise<MessagePage> {
     return invoke<MessagePage>('get_messages', { personaId, limit, beforeId })
@@ -53,8 +58,11 @@ export const conversationGateway = {
     return invoke('cancel_request', { requestId })
   },
 
-  evaluateRelationship(settings: AISettings, messages: Array<Pick<Message, 'role' | 'content'>>): Promise<string> {
-    return invoke<string>('evaluate_relationship', {
+  evaluateRelationship(
+    settings: AISettings,
+    messages: Array<Pick<Message, 'role' | 'content'>>,
+  ): Promise<RelationshipEvaluation> {
+    return invoke<RelationshipEvaluation>('evaluate_relationship', {
       endpoint: settings.endpoint,
       model: settings.model,
       messagesJson: JSON.stringify(messages),

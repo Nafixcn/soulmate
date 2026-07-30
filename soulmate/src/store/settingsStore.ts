@@ -1,5 +1,16 @@
 import { create } from 'zustand'
-import { AISettings, TTSSettings, Persona, API_PRESETS, DEFAULT_PERSONA, ThemeColors, THEME_PRESETS } from '../types'
+import {
+  AISettings,
+  TTSSettings,
+  Persona,
+  API_PRESETS,
+  DEFAULT_PERSONA,
+  DEFAULT_USER_PROFILE,
+  ThemeColors,
+  THEME_PRESETS,
+  type GreetingSettings,
+  type UserProfile,
+} from '../types'
 import {
   clearLegacyApiKey,
   clearLocalSettingsSnapshots,
@@ -24,6 +35,9 @@ interface SettingsStore {
   theme: ThemeColors
   themePresetIndex: number
   persistenceError: string | null
+  userProfile: UserProfile
+  onboardingCompleted: boolean
+  greetingSettings: GreetingSettings
 
   setAISettings: (settings: Partial<AISettings>) => void
   setApiKey: (apiKey: string) => Promise<boolean>
@@ -36,6 +50,9 @@ interface SettingsStore {
   loadFromStorage: () => Promise<void>
   saveToStorage: () => Promise<boolean>
   clearPersistenceError: () => void
+  setUserProfile: (profile: Partial<UserProfile>) => void
+  completeOnboarding: () => Promise<boolean>
+  setGreetingSettings: (settings: Partial<GreetingSettings>) => void
   addPersona: (persona: Persona) => void
   updatePersona: (index: number, persona: Persona) => void
   removePersona: (index: number) => Promise<boolean>
@@ -50,6 +67,8 @@ const defaultAI: AISettings = {
   autoProgress: false,
   evalInterval: 20,
   useWebSearch: false,
+  memoryEnabled: true,
+  memoryExtractionInterval: 6,
 }
 
 const defaultTTS: TTSSettings = {
@@ -71,6 +90,13 @@ const defaultTheme: ThemeColors = {
   petals: ['🌸', '💮', '🌷', '🏵️', '✿', '❀', '🌸', '💮'],
 }
 
+const defaultGreetingSettings: GreetingSettings = {
+  enabled: true,
+  dailyCount: 2,
+  quietStart: 22,
+  quietEnd: 9,
+}
+
 let saveTimer: ReturnType<typeof setTimeout> | null = null
 let persistenceBlockCount = 0
 let saveRequestedWhileBlocked = false
@@ -84,6 +110,9 @@ function snapshotFromState(state: SettingsStore): SettingsSnapshotInput {
     activePersonaIndex: state.activePersonaIndex,
     theme: state.theme,
     themePresetIndex: state.themePresetIndex,
+    userProfile: state.userProfile,
+    onboardingCompleted: state.onboardingCompleted,
+    greetingSettings: state.greetingSettings,
   }
 }
 
@@ -133,6 +162,9 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
   theme: { ...defaultTheme },
   themePresetIndex: 0,
   persistenceError: null,
+  userProfile: { ...DEFAULT_USER_PROFILE },
+  onboardingCompleted: false,
+  greetingSettings: { ...defaultGreetingSettings },
 
   setAISettings: (partial) => {
     const previousEndpoint = get().aiSettings.endpoint
@@ -156,6 +188,26 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
   },
   setTTSSettings: (partial) => {
     set((state) => ({ ttsSettings: { ...state.ttsSettings, ...partial } }))
+    debouncedSave()
+  },
+  setUserProfile: (partial) => {
+    set((state) => ({ userProfile: { ...state.userProfile, ...partial } }))
+    debouncedSave()
+  },
+  completeOnboarding: async () => {
+    set({ onboardingCompleted: true })
+    if (await get().saveToStorage()) return true
+    set({ onboardingCompleted: false })
+    return false
+  },
+  setGreetingSettings: (partial) => {
+    set((state) => ({
+      greetingSettings: {
+        ...state.greetingSettings,
+        ...partial,
+        dailyCount: Math.max(0, Math.min(4, partial.dailyCount ?? state.greetingSettings.dailyCount)),
+      },
+    }))
     debouncedSave()
   },
   setPersona: (persona) => {
@@ -273,6 +325,9 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
           activePersonaIndex: activeIndex,
           theme: data.theme ? { ...defaultTheme, ...data.theme } : { ...defaultTheme },
           themePresetIndex: data.themePresetIndex ?? 0,
+          userProfile: { ...DEFAULT_USER_PROFILE, ...data.userProfile },
+          onboardingCompleted: data.onboardingCompleted ?? true,
+          greetingSettings: { ...defaultGreetingSettings, ...data.greetingSettings },
         })
       }
     } catch (error) {

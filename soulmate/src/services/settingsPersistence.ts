@@ -1,5 +1,5 @@
 import { load } from '@tauri-apps/plugin-store'
-import type { AISettings, Persona, ThemeColors, TTSSettings } from '../types'
+import type { AISettings, GreetingSettings, Persona, ThemeColors, TTSSettings, UserProfile } from '../types'
 import { settingsGateway } from './settingsGateway'
 
 const STORE_PATH = 'soulmate-settings.json'
@@ -16,6 +16,9 @@ export interface SettingsSnapshot {
   activePersonaIndex?: number
   theme?: Partial<ThemeColors>
   themePresetIndex?: number
+  userProfile?: Partial<UserProfile>
+  onboardingCompleted?: boolean
+  greetingSettings?: Partial<GreetingSettings>
 }
 
 export interface SettingsSnapshotInput {
@@ -26,6 +29,9 @@ export interface SettingsSnapshotInput {
   activePersonaIndex: number
   theme: ThemeColors
   themePresetIndex: number
+  userProfile?: UserProfile
+  onboardingCompleted?: boolean
+  greetingSettings?: GreetingSettings
 }
 
 export interface LoadedSettingsSnapshot {

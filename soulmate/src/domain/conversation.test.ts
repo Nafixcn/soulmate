@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import type { Message, Persona } from '../types'
+import type { Memory, Message, Persona } from '../types'
 import {
   buildConversationMessages,
   detectExpression,
   findRegenerationTurn,
+  selectRelevantMemories,
   shouldRetrieveKnowledge,
 } from './conversation'
 
@@ -70,6 +71,38 @@ describe('buildConversationMessages', () => {
     expect(request[0].content).toContain('外部知识检索结果')
     expect(request[0].content).toContain('资料：可信内容')
   })
+
+  it('grounds the prompt in user-controlled profile and memories', () => {
+    const request = buildConversationMessages(
+      messages,
+      persona,
+      [],
+      [
+        {
+          id: 'memory-1',
+          personaId: persona.id,
+          category: 'preference',
+          content: '用户喜欢爵士乐',
+          confidence: 0.9,
+          pinned: true,
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ],
+      {
+        name: '小航',
+        preferredAddress: '阿航',
+        relationshipLabel: '伴侣',
+        interests: '音乐',
+        boundaries: '不要催促回复',
+      },
+    )
+
+    expect(request[0].content).toContain('对方叫小航')
+    expect(request[0].content).toContain('称呼对方为“阿航”')
+    expect(request[0].content).toContain('用户喜欢爵士乐')
+    expect(request[0].content).toContain('不要催促回复')
+  })
 })
 
 describe('conversation rules', () => {
@@ -81,5 +114,31 @@ describe('conversation rules', () => {
   it('detects the displayed expression', () => {
     expect(detectExpression('今天真开心')).toBe('happy')
     expect(detectExpression('普通回复')).toBe('neutral')
+  })
+})
+
+describe('selectRelevantMemories', () => {
+  const memory = (input: Partial<Memory> & Pick<Memory, 'id' | 'content'>): Memory => ({
+    personaId: persona.id,
+    category: 'preference',
+    confidence: 0.8,
+    pinned: false,
+    createdAt: 1,
+    updatedAt: 1,
+    ...input,
+  })
+
+  it('keeps pinned memories and ranks memories related to the current message', () => {
+    const selected = selectRelevantMemories(
+      [
+        memory({ id: 'pinned', content: '用户希望被称呼为小航', pinned: true }),
+        memory({ id: 'related', content: '用户喜欢爵士音乐和钢琴' }),
+        memory({ id: 'unrelated', content: '用户不喜欢吃香菜' }),
+      ],
+      '今晚想听一点爵士音乐',
+      2,
+    )
+
+    expect(selected.map((item) => item.id)).toEqual(['pinned', 'related'])
   })
 })

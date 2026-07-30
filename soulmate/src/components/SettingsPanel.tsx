@@ -2,9 +2,11 @@ import React, { useEffect } from 'react'
 import { useSettingsStore } from '../store/settingsStore'
 import { API_PRESETS, THEME_PRESETS } from '../types'
 import { getVoices } from '../services/ttsService'
-import { X, Bot, Volume2, Info, Palette, KeyRound, Trash2, DatabaseBackup } from 'lucide-react'
+import { X, Bot, Volume2, Info, Palette, KeyRound, Trash2, DatabaseBackup, Brain } from 'lucide-react'
 import { Dialog } from './Dialog'
 import { DataSettings } from './DataSettings'
+import { MemorySettings } from './MemorySettings'
+import { memoryService } from '../services/memoryService'
 
 interface Props {
   onClose: () => void
@@ -24,10 +26,12 @@ export const SettingsPanel: React.FC<Props> = ({ onClose }) => {
     aiConfigured,
     setApiKey,
   } = useSettingsStore()
-  const [tab, setTab] = React.useState<'ai' | 'tts' | 'theme' | 'data' | 'about'>('ai')
+  const [tab, setTab] = React.useState<'ai' | 'memory' | 'tts' | 'theme' | 'data' | 'about'>('ai')
   const [voices, setVoices] = React.useState<SpeechSynthesisVoice[]>([])
   const [apiKeyDraft, setApiKeyDraft] = React.useState('')
   const [savingApiKey, setSavingApiKey] = React.useState(false)
+  const [connectionStatus, setConnectionStatus] = React.useState<'idle' | 'testing' | 'success' | 'error'>('idle')
+  const [connectionMessage, setConnectionMessage] = React.useState('')
   const formId = React.useId()
   const presetIndex = API_PRESETS.findIndex((p) => p.endpoint === aiSettings.endpoint)
   const isCustom = presetIndex < 0 || presetIndex >= API_PRESETS.length - 1
@@ -47,6 +51,25 @@ export const SettingsPanel: React.FC<Props> = ({ onClose }) => {
     const saved = await setApiKey(apiKey)
     if (saved) setApiKeyDraft('')
     setSavingApiKey(false)
+  }
+
+  const testConnection = async () => {
+    setConnectionStatus('testing')
+    setConnectionMessage('正在测试连接…')
+    if (apiKeyDraft.trim() && !(await setApiKey(apiKeyDraft))) {
+      setConnectionStatus('error')
+      setConnectionMessage('API Key 无法写入系统钥匙串')
+      return
+    }
+    try {
+      await memoryService.testConnection(aiSettings)
+      setApiKeyDraft('')
+      setConnectionStatus('success')
+      setConnectionMessage('连接成功')
+    } catch (error) {
+      setConnectionStatus('error')
+      setConnectionMessage(error instanceof Error ? error.message : String(error))
+    }
   }
 
   return (
@@ -73,6 +96,17 @@ export const SettingsPanel: React.FC<Props> = ({ onClose }) => {
           aria-controls={`${formId}-ai-panel`}
         >
           <Bot size={14} /> AI
+        </button>
+        <button
+          type="button"
+          id={`${formId}-memory-tab`}
+          className={`tab-btn ${tab === 'memory' ? 'active' : ''}`}
+          onClick={() => setTab('memory')}
+          role="tab"
+          aria-selected={tab === 'memory'}
+          aria-controls={`${formId}-memory-panel`}
+        >
+          <Brain size={14} /> 记忆
         </button>
         <button
           type="button"
@@ -213,6 +247,24 @@ export const SettingsPanel: React.FC<Props> = ({ onClose }) => {
                   placeholder="deepseek-chat"
                 />
               )}
+              <button
+                type="button"
+                className="connection-test-button"
+                onClick={() => void testConnection()}
+                disabled={
+                  connectionStatus === 'testing' ||
+                  (!aiConfigured && !apiKeyDraft.trim()) ||
+                  !aiSettings.endpoint ||
+                  !aiSettings.model
+                }
+              >
+                {connectionStatus === 'testing' ? '正在测试…' : '测试当前连接'}
+              </button>
+              {connectionMessage && (
+                <p className={`onboarding-status ${connectionStatus}`} role="status">
+                  {connectionMessage}
+                </p>
+              )}
               <div className="form-group">
                 <div>
                   <input
@@ -279,6 +331,11 @@ export const SettingsPanel: React.FC<Props> = ({ onClose }) => {
                 />
               </div>
             )}
+          </div>
+        )}
+        {tab === 'memory' && (
+          <div id={`${formId}-memory-panel`} role="tabpanel" aria-labelledby={`${formId}-memory-tab`}>
+            <MemorySettings />
           </div>
         )}
         {tab === 'tts' && (

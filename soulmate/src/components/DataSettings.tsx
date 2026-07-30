@@ -71,7 +71,9 @@ export const DataSettings: React.FC<Props> = ({ idPrefix }) => {
     setStatus(null)
     try {
       const summary = await importPortableBackup(file)
-      setStatus(`已导入 ${summary.personaCount} 个角色、${summary.messageCount} 条消息，正在重新加载`)
+      setStatus(
+        `已导入 ${summary.personaCount} 个角色、${summary.messageCount} 条消息、${summary.memoryCount} 条记忆，正在重新加载`,
+      )
       setTimeout(() => window.location.reload(), 600)
     } catch (importError) {
       console.error('Failed to import portable backup:', importError)

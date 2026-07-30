@@ -52,6 +52,8 @@ export const ChatWindow: React.FC = () => {
     aiConfigured,
     persistenceError,
     clearPersistenceError,
+    userProfile,
+    greetingSettings,
   } = useSettingsStore()
 
   const [showEditor, setShowEditor] = useState(false)
@@ -72,7 +74,15 @@ export const ChatWindow: React.FC = () => {
     }))
     return [arr] as const
   }, [theme.petals])
-  useChatLifecycle({ personaId: persona.id, error, clearError, loadMessages })
+  useChatLifecycle({
+    personaId: persona.id,
+    error,
+    clearError,
+    loadMessages,
+    preferredAddress: userProfile.preferredAddress,
+    interests: userProfile.interests,
+    greetingSettings,
+  })
 
   const { messagesRef, bottomRef, scrollToMessage } = useChatScroll({
     messages,

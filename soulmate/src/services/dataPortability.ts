@@ -9,6 +9,7 @@ export interface StartupWarning {
 
 export interface BackupImportSummary {
   messageCount: number
+  memoryCount: number
   personaCount: number
   hasSettings: boolean
 }

@@ -1,5 +1,20 @@
 import { expect, test } from '@playwright/test'
 
+test('completes first-run setup after a real connection check', async ({ page }) => {
+  await page.goto('/?onboarding=1')
+
+  await page.getByRole('button', { name: '开始设置' }).click()
+  await page.getByLabel('你的名字').fill('小航')
+  await page.getByLabel('希望她怎么称呼你').fill('阿航')
+  await page.getByRole('button', { name: '下一步' }).click()
+  await page.getByLabel('API Key').fill('test-onboarding-key')
+  await page.getByRole('button', { name: '测试连接' }).click()
+
+  await expect(page.getByRole('status')).toContainText('连接成功')
+  await page.getByRole('button', { name: '进入灵伴' }).click()
+  await expect(page.getByPlaceholder('输入消息...')).toBeVisible()
+})
+
 test('stores API credentials without exposing the saved value', async ({ page }) => {
   await page.goto('/')
 
@@ -114,4 +129,17 @@ test('enables the optional app lock from data settings', async ({ page }) => {
 
   await expect(page.getByRole('status')).toContainText('应用锁已启用')
   await expect(page.getByRole('button', { name: '关闭应用锁' })).toBeVisible()
+})
+
+test('adds and removes a user-controlled memory', async ({ page }) => {
+  await page.goto('/')
+
+  await page.getByTitle('设置').click()
+  await page.getByRole('tab', { name: '记忆' }).click()
+  await page.getByPlaceholder('手动添加一条可靠记忆').fill('用户喜欢爵士乐')
+  await page.getByTitle('添加记忆').click()
+
+  await expect(page.locator('.memory-item')).toContainText('用户喜欢爵士乐')
+  await page.getByTitle('删除记忆').click()
+  await expect(page.locator('.memory-item')).toHaveCount(0)
 })

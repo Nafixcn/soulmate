@@ -11,8 +11,8 @@ use crate::AppState;
 const DEFAULT_PAGE_SIZE: i64 = 200;
 const MAX_PAGE_SIZE: i64 = 500;
 const SETTINGS_ID: i64 = 1;
-const SCHEMA_VERSION: i64 = 3;
-const BACKUP_FORMAT_VERSION: u32 = 1;
+const SCHEMA_VERSION: i64 = 4;
+const BACKUP_FORMAT_VERSION: u32 = 2;
 const MAX_BACKUP_BYTES: usize = 64 * 1024 * 1024;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
@@ -22,6 +22,20 @@ pub struct Message {
     pub content: String,
     pub thinking: Option<String>,
     pub timestamp: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Memory {
+    pub id: String,
+    pub persona_id: String,
+    pub category: String,
+    pub content: String,
+    pub source_message_id: Option<String>,
+    pub confidence: f64,
+    pub pinned: bool,
+    pub created_at: i64,
+    pub updated_at: i64,
 }
 
 #[derive(Debug, Serialize, PartialEq, Eq)]
@@ -48,6 +62,8 @@ struct PortableBackup {
     exported_at: i64,
     settings: Option<serde_json::Value>,
     messages: Vec<BackupMessage>,
+    #[serde(default)]
+    memories: Vec<Memory>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
@@ -65,6 +81,7 @@ struct BackupMessage {
 #[serde(rename_all = "camelCase")]
 pub struct BackupImportSummary {
     pub message_count: usize,
+    pub memory_count: usize,
     pub persona_count: usize,
     pub has_settings: bool,
 }
@@ -187,6 +204,51 @@ pub fn search_messages(
 }
 
 #[tauri::command]
+pub fn list_memories(state: State<AppState>, persona_id: String) -> Result<Vec<Memory>, String> {
+    let conn = state.db.lock().map_err(|error| error.to_string())?;
+    query_memories(&conn, &persona_id).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn upsert_memory(state: State<AppState>, memory: Memory) -> Result<Memory, String> {
+    validate_memory(&memory)?;
+    let conn = state.db.lock().map_err(|error| error.to_string())?;
+    upsert_memory_to_db(&conn, &memory).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn delete_memory(
+    state: State<AppState>,
+    persona_id: String,
+    memory_id: String,
+) -> Result<(), String> {
+    let conn = state.db.lock().map_err(|error| error.to_string())?;
+    conn.execute(
+        "DELETE FROM memories WHERE persona_id = ?1 AND id = ?2",
+        rusqlite::params![persona_id, memory_id],
+    )
+    .map(|_| ())
+    .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn set_memory_pinned(
+    state: State<AppState>,
+    persona_id: String,
+    memory_id: String,
+    pinned: bool,
+) -> Result<(), String> {
+    let conn = state.db.lock().map_err(|error| error.to_string())?;
+    conn.execute(
+        "UPDATE memories SET pinned = ?3, updated_at = ?4
+         WHERE persona_id = ?1 AND id = ?2",
+        rusqlite::params![persona_id, memory_id, pinned, unix_timestamp_millis()],
+    )
+    .map(|_| ())
+    .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 pub fn take_startup_warning(state: State<AppState>) -> Result<Option<StartupWarning>, String> {
     state
         .startup_warning
@@ -259,6 +321,17 @@ fn initialize_schema(conn: &Connection) -> rusqlite::Result<()> {
             id INTEGER PRIMARY KEY CHECK (id = 1),
             json TEXT NOT NULL,
             updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+         );
+         CREATE TABLE IF NOT EXISTS memories (
+            id TEXT PRIMARY KEY,
+            persona_id TEXT NOT NULL,
+            category TEXT NOT NULL CHECK (category IN ('profile', 'preference', 'event', 'boundary')),
+            content TEXT NOT NULL,
+            source_message_id TEXT,
+            confidence REAL NOT NULL CHECK (confidence >= 0 AND confidence <= 1),
+            pinned INTEGER NOT NULL DEFAULT 0,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
          );",
     )?;
 
@@ -272,6 +345,10 @@ fn initialize_schema(conn: &Connection) -> rusqlite::Result<()> {
     transaction.execute_batch(
         "CREATE INDEX IF NOT EXISTS idx_messages_persona_timestamp
          ON messages(persona_id, timestamp);
+         CREATE INDEX IF NOT EXISTS idx_memories_persona_updated
+         ON memories(persona_id, pinned DESC, updated_at DESC);
+         CREATE UNIQUE INDEX IF NOT EXISTS idx_memories_persona_content
+         ON memories(persona_id, content);
          CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
             content,
             content='messages',
@@ -469,6 +546,68 @@ fn search_messages_in_db(
     rows.collect()
 }
 
+fn query_memories(conn: &Connection, persona_id: &str) -> rusqlite::Result<Vec<Memory>> {
+    let mut statement = conn.prepare(
+        "SELECT id, persona_id, category, content, source_message_id, confidence,
+                pinned, created_at, updated_at
+         FROM memories WHERE persona_id = ?1
+         ORDER BY pinned DESC, updated_at DESC, rowid DESC",
+    )?;
+    let rows = statement.query_map([persona_id], map_memory)?;
+    rows.collect()
+}
+
+fn upsert_memory_to_db(conn: &Connection, memory: &Memory) -> rusqlite::Result<Memory> {
+    conn.execute(
+        "INSERT INTO memories (
+            id, persona_id, category, content, source_message_id, confidence,
+            pinned, created_at, updated_at
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+         ON CONFLICT(persona_id, content) DO UPDATE SET
+            category = excluded.category,
+            source_message_id = COALESCE(excluded.source_message_id, memories.source_message_id),
+            confidence = MAX(memories.confidence, excluded.confidence),
+            updated_at = excluded.updated_at",
+        rusqlite::params![
+            memory.id,
+            memory.persona_id,
+            memory.category,
+            memory.content,
+            memory.source_message_id,
+            memory.confidence,
+            memory.pinned,
+            memory.created_at,
+            memory.updated_at
+        ],
+    )?;
+    conn.query_row(
+        "SELECT id, persona_id, category, content, source_message_id, confidence,
+                pinned, created_at, updated_at
+         FROM memories WHERE persona_id = ?1 AND content = ?2",
+        rusqlite::params![memory.persona_id, memory.content],
+        map_memory,
+    )
+}
+
+fn validate_memory(memory: &Memory) -> Result<(), String> {
+    if memory.id.trim().is_empty() || memory.persona_id.trim().is_empty() {
+        return Err("记忆 id 和 personaId 不能为空".into());
+    }
+    if memory.content.trim().is_empty() || memory.content.chars().count() > 500 {
+        return Err("记忆内容必须为 1-500 个字符".into());
+    }
+    if !matches!(
+        memory.category.as_str(),
+        "profile" | "preference" | "event" | "boundary"
+    ) {
+        return Err("记忆类别无效".into());
+    }
+    if !memory.confidence.is_finite() || !(0.0..=1.0).contains(&memory.confidence) {
+        return Err("记忆可信度必须在 0 到 1 之间".into());
+    }
+    Ok(())
+}
+
 fn message_position(
     conn: &Connection,
     persona_id: &str,
@@ -532,6 +671,7 @@ fn delete_persona_with_settings(
 ) -> rusqlite::Result<()> {
     let transaction = conn.transaction()?;
     transaction.execute("DELETE FROM messages WHERE persona_id = ?1", [persona_id])?;
+    transaction.execute("DELETE FROM memories WHERE persona_id = ?1", [persona_id])?;
     save_settings_json(&transaction, settings_json)?;
     transaction.commit()
 }
@@ -565,11 +705,22 @@ fn export_backup_json(conn: &Connection) -> Result<String, Box<dyn std::error::E
         })
     })?;
     let messages = rows.collect::<rusqlite::Result<Vec<_>>>()?;
+    let mut memories = Vec::new();
+    let mut memory_statement = conn.prepare(
+        "SELECT id, persona_id, category, content, source_message_id, confidence,
+                pinned, created_at, updated_at
+         FROM memories ORDER BY persona_id ASC, updated_at ASC, rowid ASC",
+    )?;
+    let memory_rows = memory_statement.query_map([], map_memory)?;
+    for memory in memory_rows {
+        memories.push(memory?);
+    }
     let backup = PortableBackup {
         format_version: BACKUP_FORMAT_VERSION,
         exported_at: unix_timestamp(),
         settings,
         messages,
+        memories,
     };
     Ok(serde_json::to_string_pretty(&backup)?)
 }
@@ -584,7 +735,7 @@ fn parse_and_validate_backup(backup_json: &str) -> Result<PortableBackup, String
 
     let mut backup: PortableBackup =
         serde_json::from_str(backup_json).map_err(|error| format!("备份格式无效: {error}"))?;
-    if backup.format_version != BACKUP_FORMAT_VERSION {
+    if !matches!(backup.format_version, 1 | BACKUP_FORMAT_VERSION) {
         return Err(format!(
             "不支持的备份版本: {}，当前支持版本: {}",
             backup.format_version, BACKUP_FORMAT_VERSION
@@ -616,6 +767,14 @@ fn parse_and_validate_backup(backup_json: &str) -> Result<PortableBackup, String
         }
     }
 
+    let mut memory_ids = HashSet::with_capacity(backup.memories.len());
+    for memory in &backup.memories {
+        validate_memory(memory)?;
+        if !memory_ids.insert(memory.id.as_str()) {
+            return Err(format!("备份包含重复记忆 id: {}", memory.id));
+        }
+    }
+
     Ok(backup)
 }
 
@@ -640,6 +799,7 @@ fn import_backup(
 
     Ok(BackupImportSummary {
         message_count: backup.messages.len(),
+        memory_count: backup.memories.len(),
         persona_count: backup
             .messages
             .iter()
@@ -655,6 +815,7 @@ fn replace_database_contents(
     backup: &PortableBackup,
 ) -> rusqlite::Result<()> {
     transaction.execute("DELETE FROM messages", [])?;
+    transaction.execute("DELETE FROM memories", [])?;
     transaction.execute("DELETE FROM app_settings", [])?;
 
     if let Some(settings) = &backup.settings {
@@ -676,6 +837,11 @@ fn replace_database_contents(
             message.thinking,
             message.timestamp
         ])?;
+    }
+    drop(statement);
+
+    for memory in &backup.memories {
+        upsert_memory_to_db(transaction, memory)?;
     }
     Ok(())
 }
@@ -733,6 +899,13 @@ fn unix_timestamp() -> i64 {
         .as_secs() as i64
 }
 
+fn unix_timestamp_millis() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as i64
+}
+
 fn has_column(conn: &Connection, table: &str, column: &str) -> rusqlite::Result<bool> {
     let mut statement = conn.prepare(&format!("PRAGMA table_info({table})"))?;
     let names = statement.query_map([], |row| row.get::<_, String>(1))?;
@@ -773,6 +946,20 @@ fn map_message(row: &Row<'_>) -> rusqlite::Result<Message> {
         content: row.get(2)?,
         thinking: row.get(3)?,
         timestamp: row.get(4)?,
+    })
+}
+
+fn map_memory(row: &Row<'_>) -> rusqlite::Result<Memory> {
+    Ok(Memory {
+        id: row.get(0)?,
+        persona_id: row.get(1)?,
+        category: row.get(2)?,
+        content: row.get(3)?,
+        source_message_id: row.get(4)?,
+        confidence: row.get(5)?,
+        pinned: row.get(6)?,
+        created_at: row.get(7)?,
+        updated_at: row.get(8)?,
     })
 }
 
@@ -820,6 +1007,41 @@ mod tests {
             thinking: None,
             timestamp,
         }
+    }
+
+    fn memory(id: &str, persona_id: &str, content: &str, timestamp: i64) -> Memory {
+        Memory {
+            id: id.into(),
+            persona_id: persona_id.into(),
+            category: "preference".into(),
+            content: content.into(),
+            source_message_id: Some("source".into()),
+            confidence: 0.8,
+            pinned: false,
+            created_at: timestamp,
+            updated_at: timestamp,
+        }
+    }
+
+    #[test]
+    fn stores_deduplicates_and_lists_persona_memories() {
+        let conn = test_connection();
+        let first = upsert_memory_to_db(&conn, &memory("m1", "persona-a", "用户喜欢爵士乐", 1))
+            .expect("save first memory");
+        let mut duplicate = memory("m2", "persona-a", "用户喜欢爵士乐", 2);
+        duplicate.confidence = 0.95;
+        duplicate.pinned = true;
+        let updated = upsert_memory_to_db(&conn, &duplicate).expect("update duplicate memory");
+        upsert_memory_to_db(&conn, &memory("m3", "persona-b", "其他角色记忆", 3))
+            .expect("save other persona memory");
+
+        assert_eq!(first.id, "m1");
+        assert_eq!(updated.id, "m1");
+        assert_eq!(updated.confidence, 0.95);
+        assert_eq!(
+            query_memories(&conn, "persona-a").expect("list memories"),
+            vec![updated]
+        );
     }
 
     #[test]
@@ -1237,6 +1459,11 @@ mod tests {
         second.role = "assistant".into();
         save_message_to_db(&source, "persona-a", &first).expect("save first persona message");
         save_message_to_db(&source, "persona-b", &second).expect("save second persona message");
+        let saved_memory = upsert_memory_to_db(
+            &source,
+            &memory("memory-a", "persona-a", "用户喜欢爵士乐", 3),
+        )
+        .expect("save memory");
 
         let exported = export_backup_json(&source).expect("export backup");
         assert!(!exported.contains("legacy-secret"));
@@ -1253,6 +1480,7 @@ mod tests {
             summary,
             BackupImportSummary {
                 message_count: 2,
+                memory_count: 1,
                 persona_count: 2,
                 has_settings: true,
             }
@@ -1268,6 +1496,10 @@ mod tests {
         assert!(query_all_messages(&destination, "old")
             .expect("load replaced messages")
             .is_empty());
+        assert_eq!(
+            query_memories(&destination, "persona-a").expect("load imported memory"),
+            vec![saved_memory]
+        );
         assert_eq!(
             serde_json::from_str::<serde_json::Value>(
                 &load_settings_json(&destination)
@@ -1348,7 +1580,7 @@ mod tests {
             ]
         }"#;
         let unsupported_version = r#"{
-            "formatVersion": 2,
+            "formatVersion": 3,
             "exportedAt": 1,
             "settings": {},
             "messages": []
