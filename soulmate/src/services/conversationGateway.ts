@@ -88,18 +88,18 @@ export const conversationGateway = {
       onChunk(content, thinking)
     }
 
-    await Promise.all([
-      invoke('send_message', {
-        messagesJson: JSON.stringify(messages),
-        endpoint: settings.endpoint,
-        model: settings.model,
-        temperature: settings.temperature,
-        maxTokens: settings.maxTokens,
-        requestId,
-        onChunk: channel,
-      }),
-      completed,
-    ])
+    await invoke('send_message', {
+      messagesJson: JSON.stringify(messages),
+      endpoint: settings.endpoint,
+      model: settings.model,
+      temperature: settings.temperature,
+      maxTokens: settings.maxTokens,
+      requestId,
+      onChunk: channel,
+    })
+    // A successful command is also terminal if its final channel event is lost.
+    resolveCompleted()
+    await completed
 
     return { content, thinking }
   },

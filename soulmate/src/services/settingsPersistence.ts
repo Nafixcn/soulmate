@@ -78,17 +78,17 @@ export function loadLegacyLocalApiKey(): string {
   return current?.aiSettings?.apiKey || legacy?.aiSettings?.apiKey || ''
 }
 
-export async function hasApiKey(): Promise<boolean> {
+export async function hasApiKey(endpoint: string): Promise<boolean> {
   try {
-    return await settingsGateway.hasApiKey()
+    return await settingsGateway.hasApiKey(endpoint)
   } catch {
     return false
   }
 }
 
-export async function saveApiKey(apiKey: string): Promise<boolean> {
+export async function saveApiKey(endpoint: string, apiKey: string): Promise<boolean> {
   try {
-    await settingsGateway.saveApiKey(apiKey)
+    await settingsGateway.saveApiKey(endpoint, apiKey)
     return true
   } catch (error) {
     console.warn('Failed to save API key to system keychain:', error)

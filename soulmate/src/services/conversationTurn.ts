@@ -35,7 +35,10 @@ export async function runConversationTurn(options: ConversationTurnOptions): Pro
   let lastError: unknown
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     if (options.signal.aborted || !options.isCurrent()) return null
-    if (attempt > 0) await waitForRetry(RETRY_DELAY_MS * attempt, options.signal)
+    if (attempt > 0) {
+      await waitForRetry(RETRY_DELAY_MS * attempt, options.signal)
+      if (options.signal.aborted || !options.isCurrent()) return null
+    }
 
     try {
       const completion = await conversationGateway.streamCompletion({
@@ -79,14 +82,12 @@ export async function runConversationTurn(options: ConversationTurnOptions): Pro
 
 function waitForRetry(delay: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve) => {
-    const timer = setTimeout(resolve, delay)
-    signal.addEventListener(
-      'abort',
-      () => {
-        clearTimeout(timer)
-        resolve()
-      },
-      { once: true },
-    )
+    const finish = () => {
+      clearTimeout(timer)
+      signal.removeEventListener('abort', finish)
+      resolve()
+    }
+    const timer = setTimeout(finish, delay)
+    signal.addEventListener('abort', finish, { once: true })
   })
 }

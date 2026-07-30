@@ -17,6 +17,7 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: soulmate/package-lock.json
+      - run: node ../scripts/check-version.mjs
       - run: npm ci
       - run: npm run lint
       - run: npm run format:check

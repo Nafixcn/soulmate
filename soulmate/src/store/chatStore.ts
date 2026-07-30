@@ -196,7 +196,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         requestId: reqId,
         controller,
       })
-      if (completed) void maybeEvaluateRelation(persona, aiSettings)
+      if (completed) void evaluateRelationshipProgress(persona, aiSettings)
     } catch (error: unknown) {
       if (controller.signal.aborted) return
       set({
@@ -262,7 +262,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         requestId: reqId,
         controller,
       })
-      if (completed) void maybeEvaluateRelation(persona, aiSettings)
+      if (completed) void evaluateRelationshipProgress(persona, aiSettings)
     } catch (error: unknown) {
       if (controller.signal.aborted) return
       set({
@@ -342,7 +342,7 @@ async function completeConversationTurn(options: CompleteConversationTurnOptions
 
 const STAGE_ORDER = ['刚认识', '朋友', '暧昧', '热恋', '老夫老妻']
 
-async function maybeEvaluateRelation(persona: Persona, aiSettings: AISettings) {
+export async function evaluateRelationshipProgress(persona: Persona, aiSettings: AISettings) {
   if (!aiSettings.autoProgress) return
 
   const state = useChatStore.getState()
@@ -364,14 +364,16 @@ async function maybeEvaluateRelation(persona: Persona, aiSettings: AISettings) {
 
     const detected = result.trim()
     if (useChatStore.getState().activePersonaId !== persona.id) return
-    const currentIdx = STAGE_ORDER.indexOf(persona.relationshipStage)
+    const settingsState = useSettingsStore.getState()
+    const currentPersona = settingsState.personas.find((candidate) => candidate.id === persona.id)
+    if (!currentPersona) return
+    const currentIdx = STAGE_ORDER.indexOf(currentPersona.relationshipStage)
     const detectedIdx = STAGE_ORDER.indexOf(detected)
     if (detectedIdx < 0) return
 
     if (detectedIdx > currentIdx) {
       const newStage = STAGE_ORDER[detectedIdx] as Persona['relationshipStage']
-      const updatedPersona = { ...persona, relationshipStage: newStage }
-      useSettingsStore.getState().setPersona(updatedPersona)
+      if (!settingsState.advancePersonaRelationship(persona.id, newStage)) return
 
       const levelNames: Record<string, string> = {
         朋友: '💛 你们成为朋友了',
@@ -388,7 +390,9 @@ async function maybeEvaluateRelation(persona: Persona, aiSettings: AISettings) {
         timestamp: Date.now(),
       }
       await conversationGateway.saveMessage(persona.id, notifyMsg)
-      useChatStore.setState((state) => ({ messages: [...state.messages, notifyMsg] }))
+      useChatStore.setState((state) =>
+        state.activePersonaId === persona.id ? { messages: [...state.messages, notifyMsg] } : state,
+      )
 
       if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
         new Notification('灵伴', { body: greeting, silent: false })

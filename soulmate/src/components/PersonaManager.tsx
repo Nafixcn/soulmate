@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { Persona, DEFAULT_PERSONA } from '../types'
 import { X, Plus, Trash2, Edit2 } from 'lucide-react'
+import { Dialog } from './Dialog'
 
 interface Props {
   personas: Persona[]
@@ -28,6 +29,7 @@ export const PersonaManager: React.FC<Props> = ({
   const [editing, setEditing] = useState<number | null>(null)
   const [draft, setDraft] = useState<Persona>({ ...DEFAULT_PERSONA })
   const [deleting, setDeleting] = useState<number | null>(null)
+  const formId = React.useId()
 
   const startEdit = (index: number) => {
     setEditing(index)
@@ -61,168 +63,213 @@ export const PersonaManager: React.FC<Props> = ({
 
   if (editing !== null) {
     return (
-      <div className="persona-overlay" onClick={onClose}>
-        <div className="persona-panel" onClick={(e) => e.stopPropagation()}>
-          <div className="persona-header">
-            <h2>{editing === -1 ? '新建角色' : '编辑角色'}</h2>
-            <button className="close-btn" onClick={() => setEditing(null)}>
-              <X size={20} />
-            </button>
-          </div>
-          <div className="persona-body">
-            <div className="form-group">
-              <label>名字</label>
-              <input value={draft.name} onChange={(e) => update('name', e.target.value)} maxLength={8} />
-            </div>
-            <div className="form-group">
-              <label>年龄</label>
-              <input
-                type="number"
-                value={draft.age}
-                onChange={(e) => {
-                  const v = parseInt(e.target.value)
-                  update('age', isNaN(v) ? 18 : v)
-                }}
-                min={16}
-                max={30}
-              />
-            </div>
-            <div className="form-group">
-              <label>对你的称呼</label>
-              <input
-                value={draft.nickname}
-                onChange={(e) => update('nickname', e.target.value)}
-                placeholder="哥哥"
-                maxLength={8}
-              />
-            </div>
-            <div className="form-group">
-              <label>性格</label>
-              <div className="tag-grid">
-                {PERSONALITIES.map((p) => (
-                  <button
-                    key={p}
-                    className={`tag ${draft.personality === p ? 'active' : ''}`}
-                    onClick={() => update('personality', p)}
-                  >
-                    {p}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="form-group">
-              <label>爱好</label>
-              <input
-                value={draft.hobby}
-                onChange={(e) => update('hobby', e.target.value)}
-                placeholder="看电影、听音乐"
-              />
-            </div>
-            <div className="form-group">
-              <label>说话风格</label>
-              <textarea
-                value={draft.speakingStyle}
-                onChange={(e) => update('speakingStyle', e.target.value)}
-                rows={2}
-              />
-            </div>
-            <div className="form-group">
-              <label>关系阶段</label>
-              <div className="tag-grid">
-                {STAGES.map((s) => (
-                  <button
-                    key={s}
-                    className={`tag ${draft.relationshipStage === s ? 'active' : ''}`}
-                    onClick={() => update('relationshipStage', s)}
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="form-group">
-              <label>图标</label>
-              <div className="emoji-grid">
-                {ICONS.map((emoji) => (
-                  <button
-                    key={emoji}
-                    className={`emoji-btn ${draft.emoji === emoji ? 'active' : ''}`}
-                    onClick={() => update('emoji', emoji)}
-                  >
-                    {emoji}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 8 }}>
-              <button className="tag" onClick={() => setEditing(null)} style={{ padding: '8px 24px' }}>
-                取消
-              </button>
-              <button className="tag active" onClick={saveEdit} style={{ padding: '8px 24px' }}>
-                保存
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div className="persona-overlay" onClick={onClose}>
-      <div className="persona-panel" onClick={(e) => e.stopPropagation()}>
+      <Dialog
+        key="persona-form"
+        ariaLabelledBy={`${formId}-form-title`}
+        onClose={() => setEditing(null)}
+        overlayClassName="persona-overlay"
+        panelClassName="persona-panel"
+      >
         <div className="persona-header">
-          <h2>角色管理</h2>
-          <button className="close-btn" onClick={onClose}>
+          <h2 id={`${formId}-form-title`}>{editing === -1 ? '新建角色' : '编辑角色'}</h2>
+          <button
+            type="button"
+            className="close-btn"
+            onClick={() => setEditing(null)}
+            aria-label={editing === -1 ? '关闭新建角色' : '关闭编辑角色'}
+          >
             <X size={20} />
           </button>
         </div>
         <div className="persona-body">
-          {personas.map((p, i) => (
-            <div key={p.id} className={`persona-list-item ${i === activeIndex ? 'active' : ''}`}>
-              <div
-                className="persona-list-info"
-                onClick={() => {
-                  onSwitch(i)
-                  onClose()
-                }}
-              >
-                <span className="persona-list-emoji">
-                  {p.avatar ? <img src={p.avatar} className="persona-list-avatar" alt="" /> : p.emoji}
-                </span>
-                <div>
-                  <div className="persona-list-name">{p.name}</div>
-                  <div className="persona-list-desc">
-                    {p.personality} · {p.relationshipStage}
-                  </div>
+          <div className="form-group">
+            <label htmlFor={`${formId}-name`}>名字</label>
+            <input
+              id={`${formId}-name`}
+              value={draft.name}
+              onChange={(e) => update('name', e.target.value)}
+              maxLength={8}
+            />
+          </div>
+          <div className="form-group">
+            <label htmlFor={`${formId}-age`}>年龄</label>
+            <input
+              id={`${formId}-age`}
+              type="number"
+              value={draft.age}
+              onChange={(e) => {
+                const v = parseInt(e.target.value)
+                update('age', isNaN(v) ? 18 : v)
+              }}
+              min={16}
+              max={30}
+            />
+          </div>
+          <div className="form-group">
+            <label htmlFor={`${formId}-nickname`}>对你的称呼</label>
+            <input
+              id={`${formId}-nickname`}
+              value={draft.nickname}
+              onChange={(e) => update('nickname', e.target.value)}
+              placeholder="哥哥"
+              maxLength={8}
+            />
+          </div>
+          <div className="form-group" role="group" aria-labelledby={`${formId}-personality-label`}>
+            <div id={`${formId}-personality-label`} className="form-label">
+              性格
+            </div>
+            <div className="tag-grid">
+              {PERSONALITIES.map((p) => (
+                <button
+                  type="button"
+                  key={p}
+                  className={`tag ${draft.personality === p ? 'active' : ''}`}
+                  onClick={() => update('personality', p)}
+                  aria-pressed={draft.personality === p}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="form-group">
+            <label htmlFor={`${formId}-hobby`}>爱好</label>
+            <input
+              id={`${formId}-hobby`}
+              value={draft.hobby}
+              onChange={(e) => update('hobby', e.target.value)}
+              placeholder="看电影、听音乐"
+            />
+          </div>
+          <div className="form-group">
+            <label htmlFor={`${formId}-speaking-style`}>说话风格</label>
+            <textarea
+              id={`${formId}-speaking-style`}
+              value={draft.speakingStyle}
+              onChange={(e) => update('speakingStyle', e.target.value)}
+              rows={2}
+            />
+          </div>
+          <div className="form-group" role="group" aria-labelledby={`${formId}-relationship-label`}>
+            <div id={`${formId}-relationship-label`} className="form-label">
+              关系阶段
+            </div>
+            <div className="tag-grid">
+              {STAGES.map((s) => (
+                <button
+                  type="button"
+                  key={s}
+                  className={`tag ${draft.relationshipStage === s ? 'active' : ''}`}
+                  onClick={() => update('relationshipStage', s)}
+                  aria-pressed={draft.relationshipStage === s}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="form-group" role="group" aria-labelledby={`${formId}-icon-label`}>
+            <div id={`${formId}-icon-label`} className="form-label">
+              图标
+            </div>
+            <div className="emoji-grid">
+              {ICONS.map((emoji) => (
+                <button
+                  type="button"
+                  key={emoji}
+                  className={`emoji-btn ${draft.emoji === emoji ? 'active' : ''}`}
+                  onClick={() => update('emoji', emoji)}
+                  aria-label={`选择图标 ${emoji}`}
+                  aria-pressed={draft.emoji === emoji}
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 8 }}>
+            <button type="button" className="tag" onClick={() => setEditing(null)} style={{ padding: '8px 24px' }}>
+              取消
+            </button>
+            <button type="button" className="tag active" onClick={saveEdit} style={{ padding: '8px 24px' }}>
+              保存
+            </button>
+          </div>
+        </div>
+      </Dialog>
+    )
+  }
+
+  return (
+    <Dialog
+      key="persona-list"
+      ariaLabelledBy={`${formId}-manager-title`}
+      onClose={onClose}
+      overlayClassName="persona-overlay"
+      panelClassName="persona-panel"
+    >
+      <div className="persona-header">
+        <h2 id={`${formId}-manager-title`}>角色管理</h2>
+        <button type="button" className="close-btn" onClick={onClose} aria-label="关闭角色管理">
+          <X size={20} />
+        </button>
+      </div>
+      <div className="persona-body">
+        {personas.map((p, i) => (
+          <div key={p.id} className={`persona-list-item ${i === activeIndex ? 'active' : ''}`}>
+            <button
+              type="button"
+              className="persona-list-info"
+              onClick={() => {
+                onSwitch(i)
+                onClose()
+              }}
+              aria-current={i === activeIndex ? 'true' : undefined}
+            >
+              <span className="persona-list-emoji">
+                {p.avatar ? <img src={p.avatar} className="persona-list-avatar" alt="" /> : p.emoji}
+              </span>
+              <div>
+                <div className="persona-list-name">{p.name}</div>
+                <div className="persona-list-desc">
+                  {p.personality} · {p.relationshipStage}
                 </div>
               </div>
-              <div className="persona-list-actions">
-                <button className="persona-action-btn" onClick={() => startEdit(i)}>
-                  <Edit2 size={14} />
+            </button>
+            <div className="persona-list-actions">
+              <button
+                type="button"
+                className="persona-action-btn"
+                onClick={() => startEdit(i)}
+                aria-label={`编辑角色 ${p.name}`}
+              >
+                <Edit2 size={14} />
+              </button>
+              {personas.length > 1 && (
+                <button
+                  type="button"
+                  className="persona-action-btn danger"
+                  onClick={() => void removePersona(i)}
+                  disabled={deleting !== null}
+                  title="删除角色及聊天记录"
+                  aria-label={`删除角色 ${p.name} 及聊天记录`}
+                >
+                  <Trash2 size={14} />
                 </button>
-                {personas.length > 1 && (
-                  <button
-                    className="persona-action-btn danger"
-                    onClick={() => void removePersona(i)}
-                    disabled={deleting !== null}
-                    title="删除角色及聊天记录"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                )}
-              </div>
+              )}
             </div>
-          ))}
-          <button
-            className="tag active"
-            onClick={startNew}
-            style={{ padding: '10px', justifyContent: 'center', display: 'flex', alignItems: 'center', gap: 6 }}
-          >
-            <Plus size={14} /> 新建角色
-          </button>
-        </div>
+          </div>
+        ))}
+        <button
+          type="button"
+          className="tag active"
+          onClick={startNew}
+          style={{ padding: '10px', justifyContent: 'center', display: 'flex', alignItems: 'center', gap: 6 }}
+        >
+          <Plus size={14} /> 新建角色
+        </button>
       </div>
-    </div>
+    </Dialog>
   )
 }

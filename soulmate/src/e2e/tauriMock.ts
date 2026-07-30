@@ -17,6 +17,7 @@ function page(messages: Message[], hasMore = false): MessagePage {
 export function setupTauriMock(): void {
   let settingsJson: string | null = null
   let apiConfigured = false
+  let appLockPin = ''
 
   mockIPC((command, payload = {}) => {
     const args = payload as Record<string, unknown>
@@ -31,6 +32,19 @@ export function setupTauriMock(): void {
       case 'save_api_key':
         apiConfigured = Boolean(args.apiKey)
         return null
+      case 'take_startup_warning':
+        return null
+      case 'has_app_lock':
+        return Boolean(appLockPin)
+      case 'set_app_lock':
+        appLockPin = args.pin as string
+        return null
+      case 'verify_app_lock':
+        return !appLockPin || args.pin === appLockPin
+      case 'export_database_backup':
+        return JSON.stringify({ formatVersion: 1, exportedAt: 1, settings: {}, messages: [] })
+      case 'import_database_backup':
+        return { messageCount: 0, personaCount: 0, hasSettings: true }
       case 'get_messages':
         return page([])
       case 'search_messages':

@@ -41,10 +41,17 @@ export const ChatInput: React.FC<Props> = ({ onSend, disabled }) => {
         onChange={(e) => setText(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder="输入消息..."
+        aria-label="消息内容"
         disabled={disabled}
         rows={1}
       />
-      <button className="send-btn" onClick={handleSend} disabled={disabled || !text.trim()}>
+      <button
+        type="button"
+        className="send-btn"
+        onClick={handleSend}
+        disabled={disabled || !text.trim()}
+        aria-label="发送消息"
+      >
         <Send size={16} />
       </button>
     </div>

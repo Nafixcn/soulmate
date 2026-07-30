@@ -112,6 +112,10 @@ body,
 .header-info {
   text-align: center;
   cursor: default;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
 }
 .header-name {
   font-size: 12px;
@@ -194,7 +198,11 @@ body,
   display: flex;
   align-items: center;
   gap: 8px;
+  width: 100%;
   padding: 10px 14px;
+  border: none;
+  background: transparent;
+  text-align: left;
   cursor: pointer;
   font-size: 13px;
   color: var(--text);
@@ -315,7 +323,11 @@ body,
   display: flex;
   align-items: center;
   gap: 8px;
+  width: 100%;
   padding: 8px 10px;
+  border: none;
+  background: transparent;
+  text-align: left;
   border-radius: 8px;
   cursor: pointer;
   font-size: 12px;
@@ -556,6 +568,8 @@ body,
 .thinking-toggle {
   font-size: 11px;
   color: #b8a0a8;
+  border: none;
+  background: transparent;
   cursor: pointer;
   padding: 4px 8px;
   border-radius: 8px;
@@ -790,7 +804,8 @@ body,
 }
 .tab-btn {
   flex: 1;
-  padding: 12px;
+  min-width: 0;
+  padding: 12px 6px;
   border: none;
   background: none;
   font-size: 13px;
@@ -800,6 +815,7 @@ body,
   align-items: center;
   justify-content: center;
   gap: 5px;
+  white-space: nowrap;
   transition: all 0.2s;
   font-weight: 500;
 }
@@ -821,7 +837,8 @@ body,
   flex-direction: column;
   gap: 5px;
 }
-.form-group label {
+.form-group label,
+.form-label {
   font-size: 12px;
   color: var(--sub);
   font-weight: 500;
@@ -1012,6 +1029,10 @@ body,
   display: flex;
   align-items: center;
   gap: 10px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  text-align: left;
   cursor: pointer;
   flex: 1;
 }
@@ -1501,6 +1522,117 @@ textarea:focus-visible {
 .persona-list-item.active {
   border-color: color-mix(in srgb, var(--primary) 36%, transparent);
   background: color-mix(in srgb, var(--primary) 8%, white);
+}
+
+.data-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.data-settings-section {
+  border-bottom: 1px solid color-mix(in srgb, var(--sub) 22%, transparent);
+  padding-bottom: 18px;
+}
+
+.data-settings-section:last-of-type {
+  border-bottom: 0;
+}
+
+.data-settings-section h3 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+
+.data-settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.hidden-file-input {
+  display: none;
+}
+
+.settings-status,
+.settings-error {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.settings-status {
+  background: color-mix(in srgb, #2f9e64 12%, transparent);
+  color: #23774b;
+}
+
+.settings-error {
+  background: color-mix(in srgb, #c84452 12%, transparent);
+  color: #a72f3c;
+}
+
+.app-lock-screen {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.app-lock-panel {
+  width: min(340px, 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 28px;
+  border: 1px solid color-mix(in srgb, var(--sub) 28%, transparent);
+  border-radius: 8px;
+  background: var(--ai-bg);
+  box-shadow: 0 14px 40px rgba(34, 22, 29, 0.12);
+}
+
+.app-lock-panel h1,
+.app-lock-panel p {
+  margin: 0;
+}
+
+.app-lock-panel form {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.app-lock-panel label {
+  font-size: 12px;
+  color: var(--sub);
+}
+
+.app-lock-panel input {
+  width: 100%;
+  border: 1px solid color-mix(in srgb, var(--sub) 35%, transparent);
+  border-radius: 6px;
+  padding: 10px 12px;
+  background: var(--bg);
+  color: var(--text);
+  text-align: center;
+  font-size: 18px;
+}
+
+.app-lock-panel .tag {
+  align-self: center;
+}
+
+.app-lock-error {
+  color: #a72f3c;
+  text-align: center;
+  font-size: 12px;
 }
 
 @media (max-width: 720px) {

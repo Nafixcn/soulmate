@@ -29,6 +29,7 @@ interface SettingsStore {
   setApiKey: (apiKey: string) => Promise<boolean>
   setTTSSettings: (settings: Partial<TTSSettings>) => void
   setPersona: (persona: Persona) => void
+  advancePersonaRelationship: (personaId: string, relationshipStage: Persona['relationshipStage']) => boolean
   applyPreset: (index: number) => void
   applyThemePreset: (index: number) => void
   setTheme: (colors: ThemeColors) => void
@@ -115,6 +116,13 @@ function resumeDebouncedPersistence() {
   }
 }
 
+async function refreshApiKeyStatus(endpoint: string): Promise<void> {
+  const configured = await hasApiKey(endpoint)
+  if (useSettingsStore.getState().aiSettings.endpoint === endpoint) {
+    useSettingsStore.setState({ aiConfigured: configured })
+  }
+}
+
 export const useSettingsStore = create<SettingsStore>((set, get) => ({
   aiSettings: defaultAI,
   ttsSettings: defaultTTS,
@@ -127,14 +135,21 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
   persistenceError: null,
 
   setAISettings: (partial) => {
-    set((state) => ({ aiSettings: { ...state.aiSettings, ...partial } }))
+    const previousEndpoint = get().aiSettings.endpoint
+    const aiSettings = { ...get().aiSettings, ...partial }
+    set({
+      aiSettings,
+      ...(aiSettings.endpoint !== previousEndpoint ? { aiConfigured: false } : {}),
+    })
+    if (aiSettings.endpoint !== previousEndpoint) void refreshApiKeyStatus(aiSettings.endpoint)
     debouncedSave()
   },
   setApiKey: async (apiKey) => {
-    const saved = await saveApiKey(apiKey.trim())
-    if (saved) {
+    const endpoint = get().aiSettings.endpoint
+    const saved = await saveApiKey(endpoint, apiKey.trim())
+    if (saved && get().aiSettings.endpoint === endpoint) {
       set({ aiConfigured: apiKey.trim().length > 0, persistenceError: null })
-    } else {
+    } else if (!saved) {
       set({ persistenceError: 'API Key 无法写入系统钥匙串' })
     }
     return saved
@@ -152,16 +167,31 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     set({ persona: updatedPersona, personas })
     debouncedSave()
   },
+  advancePersonaRelationship: (personaId, relationshipStage) => {
+    const state = get()
+    const index = state.personas.findIndex((persona) => persona.id === personaId)
+    if (index < 0) return false
+
+    const updatedPersona = { ...state.personas[index], relationshipStage }
+    const personas = [...state.personas]
+    personas[index] = updatedPersona
+    set({
+      personas,
+      ...(index === state.activePersonaIndex ? { persona: updatedPersona } : {}),
+    })
+    debouncedSave()
+    return true
+  },
   applyPreset: (index) => {
     const preset = API_PRESETS[index]
     if (!preset) return
+    const previousEndpoint = get().aiSettings.endpoint
+    const endpoint = preset.endpoint || previousEndpoint
     set((state) => ({
-      aiSettings: {
-        ...state.aiSettings,
-        endpoint: preset.endpoint || state.aiSettings.endpoint,
-        model: preset.models[0] || state.aiSettings.model,
-      },
+      aiSettings: { ...state.aiSettings, endpoint, model: preset.models[0] || state.aiSettings.model },
+      ...(endpoint !== previousEndpoint ? { aiConfigured: false } : {}),
     }))
+    if (endpoint !== previousEndpoint) void refreshApiKeyStatus(endpoint)
     debouncedSave()
   },
   applyThemePreset: (index) => {
@@ -250,11 +280,12 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
       set({ persistenceError: '设置加载失败，已使用默认配置' })
     }
 
-    let configured = await hasApiKey()
+    const endpoint = get().aiSettings.endpoint
+    let configured = await hasApiKey(endpoint)
     const legacyStoreApiKey = await loadLegacyApiKey()
     const migrationCandidate = configured ? '' : legacyApiKey || legacyStoreApiKey
 
-    if (migrationCandidate && (await saveApiKey(migrationCandidate))) {
+    if (migrationCandidate && (await saveApiKey(endpoint, migrationCandidate))) {
       configured = true
       await clearLegacyApiKey()
     } else if (configured && legacyStoreApiKey) {

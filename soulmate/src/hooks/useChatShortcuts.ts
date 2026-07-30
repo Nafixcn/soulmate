@@ -9,6 +9,7 @@ interface ChatShortcutOptions {
 export function useChatShortcuts({ closeOverlays, toggleSearch, exportChat }: ChatShortcutOptions): void {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return
       if (event.key === 'Escape') {
         closeOverlays()
       }

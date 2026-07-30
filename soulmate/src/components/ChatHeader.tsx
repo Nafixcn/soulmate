@@ -45,6 +45,7 @@ export const ChatHeader: React.FC<Props> = ({
   const stage = stageConfig[persona.relationshipStage] || stageConfig['刚认识']
   const StageIcon = stage.icon
   const [showSwitcher, setShowSwitcher] = useState(false)
+  const switcherId = React.useId()
 
   return (
     <div className="chat-header">
@@ -56,46 +57,73 @@ export const ChatHeader: React.FC<Props> = ({
             <span className="avatar-emoji">{persona.emoji}</span>
           )}
         </div>
-        <div
-          className="header-info"
-          onClick={() => personas.length > 1 && setShowSwitcher(!showSwitcher)}
-          style={{ cursor: personas.length > 1 ? 'pointer' : 'default' }}
-        >
-          <div className="header-name">
-            <span className="header-name-text">{persona.name}</span>
-            {personas.length > 1 && <ChevronDown size={13} className="header-chevron" />}
-          </div>
-          <span
-            className="stage-tag"
-            style={
-              {
-                '--stage-color': stage.color,
-              } as React.CSSProperties
-            }
+        {personas.length > 1 ? (
+          <button
+            type="button"
+            className="header-info"
+            onClick={() => setShowSwitcher(!showSwitcher)}
+            aria-expanded={showSwitcher}
+            aria-controls={switcherId}
+            aria-label={`当前角色 ${persona.name}，切换角色`}
           >
-            <StageIcon size={11} /> {stage.label}
-          </span>
-          <div className="header-desc">
-            {persona.personality} · {persona.age}岁
+            <div className="header-name">
+              <span className="header-name-text">{persona.name}</span>
+              <ChevronDown size={13} className="header-chevron" aria-hidden="true" />
+            </div>
+            <span
+              className="stage-tag"
+              style={
+                {
+                  '--stage-color': stage.color,
+                } as React.CSSProperties
+              }
+            >
+              <StageIcon size={11} /> {stage.label}
+            </span>
+            <div className="header-desc">
+              {persona.personality} · {persona.age}岁
+            </div>
+          </button>
+        ) : (
+          <div className="header-info">
+            <div className="header-name">
+              <span className="header-name-text">{persona.name}</span>
+            </div>
+            <span
+              className="stage-tag"
+              style={
+                {
+                  '--stage-color': stage.color,
+                } as React.CSSProperties
+              }
+            >
+              <StageIcon size={11} /> {stage.label}
+            </span>
+            <div className="header-desc">
+              {persona.personality} · {persona.age}岁
+            </div>
           </div>
-        </div>
+        )}
       </div>
       {showSwitcher && (
-        <div className="persona-switcher">
+        <div id={switcherId} className="persona-switcher" aria-label="选择角色">
           {personas.map((p, i) => (
-            <div
-              key={i}
+            <button
+              type="button"
+              key={p.id}
               className={`persona-switcher-item ${i === activePersonaIndex ? 'active' : ''}`}
               onClick={() => {
                 onSwitchPersona(i)
                 setShowSwitcher(false)
               }}
+              aria-pressed={i === activePersonaIndex}
             >
               <span>{p.avatar ? <img src={p.avatar} className="persona-switcher-avatar" alt="" /> : p.emoji}</span>
               <span>{p.name}</span>
-            </div>
+            </button>
           ))}
-          <div
+          <button
+            type="button"
             className="persona-switcher-item"
             onClick={() => {
               onManagePersonas()
@@ -103,21 +131,27 @@ export const ChatHeader: React.FC<Props> = ({
             }}
           >
             <span>管理角色...</span>
-          </div>
+          </button>
         </div>
       )}
       <div className="header-actions">
-        <button className="header-btn" onClick={onEditPersona} title="编辑角色">
+        <button type="button" className="header-btn" onClick={onEditPersona} title="编辑角色" aria-label="编辑当前角色">
           <UserPen size={18} />
         </button>
-        <button className="header-btn" onClick={onManagePersonas} title="管理角色">
+        <button type="button" className="header-btn" onClick={onManagePersonas} title="管理角色" aria-label="管理角色">
           <UsersRound size={18} />
         </button>
-        <button className="header-btn" onClick={onSettings} title="设置">
+        <button type="button" className="header-btn" onClick={onSettings} title="设置" aria-label="打开设置">
           <Settings size={18} />
         </button>
       </div>
-      <button className="header-btn header-btn-danger" onClick={onClearChat} title="清空">
+      <button
+        type="button"
+        className="header-btn header-btn-danger"
+        onClick={onClearChat}
+        title="清空"
+        aria-label="清空当前角色聊天记录"
+      >
         <Trash2 size={18} />
       </button>
     </div>

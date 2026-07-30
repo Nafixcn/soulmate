@@ -79,6 +79,32 @@ describe('conversation turn', () => {
     expect(result?.persistenceError).toBeNull()
   })
 
+  it('does not restart a completion when cancelled during the retry delay', async () => {
+    vi.useFakeTimers()
+    const controller = new AbortController()
+    mocks.streamCompletion.mockRejectedValueOnce(new Error('temporary failure'))
+
+    const turn = runConversationTurn({
+      messages: [],
+      query: '取消重试',
+      persona: DEFAULT_PERSONA,
+      aiSettings,
+      ttsSettings,
+      requestId: 'request-cancelled-during-retry',
+      signal: controller.signal,
+      isCurrent: () => true,
+      onChunk: vi.fn(),
+      onSpeakingChange: vi.fn(),
+    })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(vi.getTimerCount()).toBe(1)
+    controller.abort()
+    await vi.runAllTimersAsync()
+
+    await expect(turn).resolves.toBeNull()
+    expect(mocks.streamCompletion).toHaveBeenCalledTimes(1)
+  })
+
   it('returns the reply with a warning when persistence fails', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined)
     mocks.streamCompletion.mockResolvedValueOnce({ content: '已经收到', thinking: '' })

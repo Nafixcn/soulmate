@@ -60,6 +60,7 @@ export const ChatWindow: React.FC = () => {
   const [showSearch, setShowSearch] = useState(false)
   const [streamingThinkOpen, setStreamingThinkOpen] = useState(true)
   const [actionError, setActionError] = useState<string | null>(null)
+  const streamingThinkingId = React.useId()
   const [petals] = useMemo(() => {
     const arr = Array.from({ length: petalCount }, (_, i) => ({
       id: i,
@@ -172,28 +173,50 @@ export const ChatWindow: React.FC = () => {
       <div className="chat-main">
         <div className="chat-body">
           {error && (
-            <div className="error-banner" onClick={clearError}>
+            <button type="button" className="error-banner" onClick={clearError} aria-label={`关闭错误提示：${error}`}>
               <AlertTriangle size={14} /> {error}
-            </div>
+            </button>
           )}
           {persistenceError && (
-            <div className="error-banner" onClick={clearPersistenceError}>
+            <button
+              type="button"
+              className="error-banner"
+              onClick={clearPersistenceError}
+              aria-label={`关闭存储错误提示：${persistenceError}`}
+            >
               <AlertTriangle size={14} /> {persistenceError}
-            </div>
+            </button>
           )}
           {actionError && (
-            <div className="error-banner" onClick={() => setActionError(null)}>
+            <button
+              type="button"
+              className="error-banner"
+              onClick={() => setActionError(null)}
+              aria-label={`关闭操作错误提示：${actionError}`}
+            >
               <AlertTriangle size={14} /> {actionError}
-            </div>
+            </button>
           )}
           {showSearch && (
             <SearchPanel personaId={persona.id} onClose={() => setShowSearch(false)} onScrollTo={handleSearchResult} />
           )}
           <div className="chat-toolbar">
-            <button className="toolbar-btn" onClick={toggleSearch} title="搜索 (Ctrl+F)">
+            <button
+              type="button"
+              className="toolbar-btn"
+              onClick={toggleSearch}
+              title="搜索 (Ctrl+F)"
+              aria-label="搜索聊天消息"
+            >
               <Search size={14} />
             </button>
-            <button className="toolbar-btn" onClick={handleExport} title="导出 (Ctrl+E)">
+            <button
+              type="button"
+              className="toolbar-btn"
+              onClick={handleExport}
+              title="导出 (Ctrl+E)"
+              aria-label="导出聊天记录"
+            >
               <Download size={14} />
             </button>
           </div>
@@ -238,12 +261,20 @@ export const ChatWindow: React.FC = () => {
                   <div className="msg-body">
                     {streamingThinking && (
                       <div className="thinking-wrapper">
-                        <div className="thinking-toggle" onClick={() => setStreamingThinkOpen(!streamingThinkOpen)}>
-                          <span className="think-arrow">{streamingThinkOpen ? '▾' : '▸'}</span>
+                        <button
+                          type="button"
+                          className="thinking-toggle"
+                          onClick={() => setStreamingThinkOpen(!streamingThinkOpen)}
+                          aria-expanded={streamingThinkOpen}
+                          aria-controls={streamingThinkingId}
+                        >
+                          <span className="think-arrow" aria-hidden="true">
+                            {streamingThinkOpen ? '▾' : '▸'}
+                          </span>
                           思考过程
-                        </div>
+                        </button>
                         {streamingThinkOpen && (
-                          <div className="thinking-block">
+                          <div id={streamingThinkingId} className="thinking-block">
                             <ReactMarkdown remarkPlugins={[remarkGfm]}>{streamingThinking}</ReactMarkdown>
                           </div>
                         )}

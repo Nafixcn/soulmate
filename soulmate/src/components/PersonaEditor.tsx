@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { Persona } from '../types'
 import { X, Camera } from 'lucide-react'
+import { Dialog } from './Dialog'
 
 interface Props {
   persona: Persona
@@ -18,6 +19,7 @@ export const PersonaEditor: React.FC<Props> = ({ persona, onChange, onClose }) =
   const [draft, setDraft] = useState<Persona>({ ...persona })
   const [avatarProcessing, setAvatarProcessing] = useState(false)
   const [avatarError, setAvatarError] = useState<string | null>(null)
+  const formId = React.useId()
 
   const update = <K extends keyof Persona>(key: K, value: Persona[K]) => {
     setDraft((prev) => ({ ...prev, [key]: value }))
@@ -77,161 +79,225 @@ export const PersonaEditor: React.FC<Props> = ({ persona, onChange, onClose }) =
   }
 
   return (
-    <div className="persona-overlay" onClick={onClose}>
-      <div className="persona-panel" onClick={(e) => e.stopPropagation()}>
-        <div className="persona-header">
-          <h2>角色设定</h2>
-          <button className="close-btn" onClick={onClose}>
-            <X size={20} />
+    <Dialog
+      ariaLabelledBy={`${formId}-title`}
+      onClose={onClose}
+      overlayClassName="persona-overlay"
+      panelClassName="persona-panel"
+    >
+      <div className="persona-header">
+        <h2 id={`${formId}-title`}>角色设定</h2>
+        <button type="button" className="close-btn" onClick={onClose} aria-label="关闭角色设定">
+          <X size={20} />
+        </button>
+      </div>
+      <div className="persona-body">
+        <div
+          className="form-group"
+          style={{ alignItems: 'center' }}
+          role="group"
+          aria-labelledby={`${formId}-avatar-label`}
+        >
+          <div id={`${formId}-avatar-label`} className="form-label">
+            头像
+          </div>
+          <div className="avatar-upload">
+            {draft.avatar ? (
+              <div className="avatar-preview">
+                <img src={draft.avatar} alt={`${draft.name || '角色'}的头像预览`} className="avatar-img" />
+                <button type="button" className="avatar-remove" onClick={handleRemoveAvatar} aria-label="移除头像">
+                  ×
+                </button>
+              </div>
+            ) : (
+              <label
+                className="avatar-placeholder"
+                style={{ cursor: 'pointer' }}
+                htmlFor={`${formId}-avatar-file`}
+                aria-label="选择头像图片"
+              >
+                <span className="avatar-emoji-lg">{draft.emoji}</span>
+                <Camera size={14} className="avatar-camera" />
+                <input
+                  id={`${formId}-avatar-file`}
+                  className="avatar-file-input"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleAvatarUpload}
+                />
+              </label>
+            )}
+            {draft.avatar && (
+              <label className="tag avatar-change-label" htmlFor={`${formId}-avatar-change`}>
+                {avatarProcessing ? '处理中...' : '更换图片'}
+                <input
+                  id={`${formId}-avatar-change`}
+                  className="avatar-file-input"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleAvatarUpload}
+                  disabled={avatarProcessing}
+                />
+              </label>
+            )}
+            {avatarError && <div className="avatar-error">{avatarError}</div>}
+          </div>
+        </div>
+        <div className="form-group">
+          <label htmlFor={`${formId}-name`}>名字</label>
+          <input
+            id={`${formId}-name`}
+            value={draft.name}
+            onChange={(e) => update('name', e.target.value)}
+            maxLength={8}
+          />
+        </div>
+        <div className="form-group">
+          <label htmlFor={`${formId}-age`}>年龄</label>
+          <input
+            id={`${formId}-age`}
+            type="number"
+            value={draft.age}
+            onChange={(e) => {
+              const v = parseInt(e.target.value)
+              update('age', isNaN(v) ? 18 : v)
+            }}
+            min={16}
+            max={30}
+          />
+        </div>
+        <div className="form-group">
+          <label htmlFor={`${formId}-nickname`}>对你的称呼</label>
+          <input
+            id={`${formId}-nickname`}
+            value={draft.nickname}
+            onChange={(e) => update('nickname', e.target.value)}
+            placeholder="哥哥"
+            maxLength={8}
+          />
+        </div>
+        <div className="form-group" role="group" aria-labelledby={`${formId}-personality-label`}>
+          <div id={`${formId}-personality-label`} className="form-label">
+            性格
+          </div>
+          <div className="tag-grid">
+            {PERSONALITIES.map((p) => (
+              <button
+                type="button"
+                key={p}
+                className={`tag ${draft.personality === p ? 'active' : ''}`}
+                onClick={() => update('personality', p)}
+                aria-pressed={draft.personality === p}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="form-group">
+          <label htmlFor={`${formId}-hobby`}>爱好</label>
+          <input
+            id={`${formId}-hobby`}
+            value={draft.hobby}
+            onChange={(e) => update('hobby', e.target.value)}
+            placeholder="看电影、听音乐"
+          />
+        </div>
+        <div className="form-group">
+          <label htmlFor={`${formId}-speaking-style`}>说话风格</label>
+          <textarea
+            id={`${formId}-speaking-style`}
+            value={draft.speakingStyle}
+            onChange={(e) => update('speakingStyle', e.target.value)}
+            rows={2}
+          />
+        </div>
+        <div className="form-group" role="group" aria-labelledby={`${formId}-relationship-label`}>
+          <div id={`${formId}-relationship-label`} className="form-label">
+            关系阶段
+          </div>
+          <div className="tag-grid">
+            {STAGES.map((s) => (
+              <button
+                type="button"
+                key={s}
+                className={`tag ${draft.relationshipStage === s ? 'active' : ''}`}
+                onClick={() => update('relationshipStage', s)}
+                aria-pressed={draft.relationshipStage === s}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="form-group">
+          <div id={`${formId}-hair-label`} className="form-label">
+            发色
+          </div>
+          <div className="color-grid" role="group" aria-labelledby={`${formId}-hair-label`}>
+            {HAIR.map((c) => (
+              <button
+                type="button"
+                key={c}
+                className={`color-btn ${draft.hairColor === c ? 'active' : ''}`}
+                style={{ background: c }}
+                onClick={() => update('hairColor', c)}
+                aria-label={`选择发色 ${c}`}
+                aria-pressed={draft.hairColor === c}
+              />
+            ))}
+          </div>
+          <div id={`${formId}-eyes-label`} className="form-label" style={{ marginTop: 8 }}>
+            瞳色
+          </div>
+          <div className="color-grid" role="group" aria-labelledby={`${formId}-eyes-label`}>
+            {EYES.map((c) => (
+              <button
+                type="button"
+                key={c}
+                className={`color-btn ${draft.eyeColor === c ? 'active' : ''}`}
+                style={{ background: c }}
+                onClick={() => update('eyeColor', c)}
+                aria-label={`选择瞳色 ${c}`}
+                aria-pressed={draft.eyeColor === c}
+              />
+            ))}
+          </div>
+        </div>
+        <div className="form-group" role="group" aria-labelledby={`${formId}-icon-label`}>
+          <div id={`${formId}-icon-label`} className="form-label">
+            图标
+          </div>
+          <div className="emoji-grid">
+            {ICONS.map((emoji) => (
+              <button
+                type="button"
+                key={emoji}
+                className={`emoji-btn ${draft.emoji === emoji ? 'active' : ''}`}
+                onClick={() => update('emoji', emoji)}
+                aria-label={`选择图标 ${emoji}`}
+                aria-pressed={draft.emoji === emoji}
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 8 }}>
+          <button type="button" className="tag" onClick={onClose} style={{ padding: '8px 24px' }}>
+            取消
+          </button>
+          <button
+            type="button"
+            className="tag active"
+            onClick={handleSave}
+            disabled={avatarProcessing}
+            style={{ padding: '8px 24px' }}
+          >
+            {avatarProcessing ? '处理中...' : '保存'}
           </button>
         </div>
-        <div className="persona-body">
-          <div className="form-group" style={{ alignItems: 'center' }}>
-            <label>头像</label>
-            <div className="avatar-upload">
-              {draft.avatar ? (
-                <div className="avatar-preview">
-                  <img src={draft.avatar} alt="" className="avatar-img" />
-                  <button className="avatar-remove" onClick={handleRemoveAvatar}>
-                    ×
-                  </button>
-                </div>
-              ) : (
-                <label className="avatar-placeholder" style={{ cursor: 'pointer' }}>
-                  <span className="avatar-emoji-lg">{draft.emoji}</span>
-                  <Camera size={14} className="avatar-camera" />
-                  <input className="avatar-file-input" type="file" accept="image/*" onChange={handleAvatarUpload} />
-                </label>
-              )}
-              {draft.avatar && (
-                <label className="tag avatar-change-label">
-                  {avatarProcessing ? '处理中...' : '更换图片'}
-                  <input
-                    className="avatar-file-input"
-                    type="file"
-                    accept="image/*"
-                    onChange={handleAvatarUpload}
-                    disabled={avatarProcessing}
-                  />
-                </label>
-              )}
-              {avatarError && <div className="avatar-error">{avatarError}</div>}
-            </div>
-          </div>
-          <div className="form-group">
-            <label>名字</label>
-            <input value={draft.name} onChange={(e) => update('name', e.target.value)} maxLength={8} />
-          </div>
-          <div className="form-group">
-            <label>年龄</label>
-            <input
-              type="number"
-              value={draft.age}
-              onChange={(e) => {
-                const v = parseInt(e.target.value)
-                update('age', isNaN(v) ? 18 : v)
-              }}
-              min={16}
-              max={30}
-            />
-          </div>
-          <div className="form-group">
-            <label>对你的称呼</label>
-            <input
-              value={draft.nickname}
-              onChange={(e) => update('nickname', e.target.value)}
-              placeholder="哥哥"
-              maxLength={8}
-            />
-          </div>
-          <div className="form-group">
-            <label>性格</label>
-            <div className="tag-grid">
-              {PERSONALITIES.map((p) => (
-                <button
-                  key={p}
-                  className={`tag ${draft.personality === p ? 'active' : ''}`}
-                  onClick={() => update('personality', p)}
-                >
-                  {p}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="form-group">
-            <label>爱好</label>
-            <input value={draft.hobby} onChange={(e) => update('hobby', e.target.value)} placeholder="看电影、听音乐" />
-          </div>
-          <div className="form-group">
-            <label>说话风格</label>
-            <textarea value={draft.speakingStyle} onChange={(e) => update('speakingStyle', e.target.value)} rows={2} />
-          </div>
-          <div className="form-group">
-            <label>关系阶段</label>
-            <div className="tag-grid">
-              {STAGES.map((s) => (
-                <button
-                  key={s}
-                  className={`tag ${draft.relationshipStage === s ? 'active' : ''}`}
-                  onClick={() => update('relationshipStage', s)}
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="form-group">
-            <label>发色 / 瞳色</label>
-            <div className="color-grid">
-              {HAIR.map((c) => (
-                <button
-                  key={c}
-                  className={`color-btn ${draft.hairColor === c ? 'active' : ''}`}
-                  style={{ background: c }}
-                  onClick={() => update('hairColor', c)}
-                />
-              ))}
-            </div>
-            <div className="color-grid" style={{ marginTop: 8 }}>
-              {EYES.map((c) => (
-                <button
-                  key={c}
-                  className={`color-btn ${draft.eyeColor === c ? 'active' : ''}`}
-                  style={{ background: c }}
-                  onClick={() => update('eyeColor', c)}
-                />
-              ))}
-            </div>
-          </div>
-          <div className="form-group">
-            <label>图标</label>
-            <div className="emoji-grid">
-              {ICONS.map((emoji) => (
-                <button
-                  key={emoji}
-                  className={`emoji-btn ${draft.emoji === emoji ? 'active' : ''}`}
-                  onClick={() => update('emoji', emoji)}
-                >
-                  {emoji}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 8 }}>
-            <button className="tag" onClick={onClose} style={{ padding: '8px 24px' }}>
-              取消
-            </button>
-            <button
-              className="tag active"
-              onClick={handleSave}
-              disabled={avatarProcessing}
-              style={{ padding: '8px 24px' }}
-            >
-              {avatarProcessing ? '处理中...' : '保存'}
-            </button>
-          </div>
-        </div>
       </div>
-    </div>
+    </Dialog>
   )
 }

@@ -90,6 +90,28 @@ describe('settings store persistence', () => {
     await useSettingsStore.getState().loadFromStorage()
 
     expect(useSettingsStore.getState().aiConfigured).toBe(true)
+    expect(mocks.hasApiKey).toHaveBeenCalledWith(useSettingsStore.getState().aiSettings.endpoint)
     expect(mocks.saveApiKey).not.toHaveBeenCalled()
+  })
+
+  it('refreshes keychain state when the API provider changes', async () => {
+    mocks.hasApiKey.mockResolvedValueOnce(true)
+
+    useSettingsStore.getState().setAISettings({ endpoint: 'https://provider.example/v1/chat' })
+    await Promise.resolve()
+
+    expect(mocks.hasApiKey).toHaveBeenCalledWith('https://provider.example/v1/chat')
+    expect(useSettingsStore.getState().aiConfigured).toBe(true)
+  })
+
+  it('stores credentials for the currently selected provider', async () => {
+    mocks.saveApiKey.mockResolvedValueOnce(true)
+    useSettingsStore.setState({
+      aiSettings: { ...useSettingsStore.getState().aiSettings, endpoint: 'https://provider.example/v1/chat' },
+    })
+
+    await expect(useSettingsStore.getState().setApiKey(' secret ')).resolves.toBe(true)
+
+    expect(mocks.saveApiKey).toHaveBeenCalledWith('https://provider.example/v1/chat', 'secret')
   })
 })

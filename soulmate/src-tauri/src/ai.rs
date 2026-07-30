@@ -25,7 +25,8 @@ pub async fn send_message(
     on_chunk: Channel<AiChunk>,
 ) -> Result<(), String> {
     validate_endpoint(&endpoint)?;
-    let api_key = credentials::load_api_key()?.ok_or_else(|| "请先配置 API Key".to_string())?;
+    let api_key =
+        credentials::load_api_key(&endpoint)?.ok_or_else(|| "请先配置 API Key".to_string())?;
 
     let messages: Vec<serde_json::Value> =
         serde_json::from_str(&messages_json).map_err(|e| e.to_string())?;
@@ -173,7 +174,8 @@ pub async fn evaluate_relationship(
     messages_json: String,
 ) -> Result<String, String> {
     validate_endpoint(&endpoint)?;
-    let api_key = credentials::load_api_key()?.ok_or_else(|| "请先配置 API Key".to_string())?;
+    let api_key =
+        credentials::load_api_key(&endpoint)?.ok_or_else(|| "请先配置 API Key".to_string())?;
 
     let client = &state.http_client;
 

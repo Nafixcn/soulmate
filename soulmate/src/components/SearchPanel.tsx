@@ -57,16 +57,22 @@ export const SearchPanel: React.FC<Props> = ({ personaId, onClose, onScrollTo })
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="搜索消息..."
+          aria-label="搜索聊天消息"
         />
-        <button className="search-close" onClick={onClose}>
+        <button type="button" className="search-close" onClick={onClose} aria-label="关闭消息搜索">
           <X size={14} />
         </button>
       </div>
-      {searching && results.length === 0 && <div className="search-empty">搜索中...</div>}
+      {searching && results.length === 0 && (
+        <div className="search-empty" role="status" aria-live="polite">
+          搜索中...
+        </div>
+      )}
       {results.length > 0 && (
-        <div className="search-results">
+        <div className="search-results" aria-label="搜索结果">
           {results.map((msg) => (
-            <div
+            <button
+              type="button"
               key={msg.id}
               className="search-result-item"
               onClick={() => {
@@ -78,11 +84,15 @@ export const SearchPanel: React.FC<Props> = ({ personaId, onClose, onScrollTo })
               <span className={`search-result-role ${msg.role}`}>{msg.role === 'user' ? '我' : 'TA'}</span>
               <span className="search-result-content">{highlightMatch(msg.content, query)}</span>
               <span className="search-result-time">{formatTime(msg.timestamp)}</span>
-            </div>
+            </button>
           ))}
         </div>
       )}
-      {!searching && query && results.length === 0 && <div className="search-empty">没有找到匹配的消息</div>}
+      {!searching && query && results.length === 0 && (
+        <div className="search-empty" role="status" aria-live="polite">
+          没有找到匹配的消息
+        </div>
+      )}
     </div>
   )
 }

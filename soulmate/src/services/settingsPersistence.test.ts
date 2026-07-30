@@ -134,11 +134,16 @@ describe('settings persistence', () => {
   it('only exposes keychain configuration state to the frontend', async () => {
     mocks.invoke.mockResolvedValueOnce(true).mockResolvedValueOnce(undefined)
 
-    await expect(hasApiKey()).resolves.toBe(true)
-    await expect(saveApiKey('new-key')).resolves.toBe(true)
+    await expect(hasApiKey('https://api.example.com/v1/chat')).resolves.toBe(true)
+    await expect(saveApiKey('https://api.example.com/v1/chat', 'new-key')).resolves.toBe(true)
 
-    expect(mocks.invoke).toHaveBeenNthCalledWith(1, 'has_api_key')
-    expect(mocks.invoke).toHaveBeenNthCalledWith(2, 'save_api_key', { apiKey: 'new-key' })
+    expect(mocks.invoke).toHaveBeenNthCalledWith(1, 'has_api_key', {
+      endpoint: 'https://api.example.com/v1/chat',
+    })
+    expect(mocks.invoke).toHaveBeenNthCalledWith(2, 'save_api_key', {
+      endpoint: 'https://api.example.com/v1/chat',
+      apiKey: 'new-key',
+    })
     expect(mocks.invoke).not.toHaveBeenCalledWith('load_api_key')
   })
 
@@ -146,8 +151,8 @@ describe('settings persistence', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     mocks.invoke.mockRejectedValue(new Error('unavailable'))
 
-    await expect(hasApiKey()).resolves.toBe(false)
-    await expect(saveApiKey('new-key')).resolves.toBe(false)
+    await expect(hasApiKey('https://api.example.com/v1/chat')).resolves.toBe(false)
+    await expect(saveApiKey('https://api.example.com/v1/chat', 'new-key')).resolves.toBe(false)
     warn.mockRestore()
   })
 

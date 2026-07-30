@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Message, MessagePage } from '../types'
+import { DEFAULT_PERSONA, type AISettings, type Message, type MessagePage } from '../types'
 
 const mocks = vi.hoisted(() => ({ invoke: vi.fn() }))
 
@@ -14,12 +14,23 @@ vi.mock('../services/ttsService', () => ({
   stopSpeaking: vi.fn(),
 }))
 
-import { useChatStore } from './chatStore'
+import { evaluateRelationshipProgress, useChatStore } from './chatStore'
+import { useSettingsStore } from './settingsStore'
 
 const messages: Message[] = [
   { id: 'user-1', role: 'user', content: '你好', timestamp: 1 },
   { id: 'assistant-1', role: 'assistant', content: '你好呀', timestamp: 2 },
 ]
+
+const aiSettings: AISettings = {
+  endpoint: 'https://example.com/v1/chat',
+  model: 'test-model',
+  temperature: 0.6,
+  maxTokens: 512,
+  autoProgress: true,
+  evalInterval: 1,
+  useWebSearch: false,
+}
 
 function page(items: Message[], hasMore = false, userMessageCount = 1): MessagePage {
   return { messages: items, hasMore, userMessageCount }
@@ -93,5 +104,38 @@ describe('chat store persistence consistency', () => {
       messageId: 'old',
     })
     expect(useChatStore.getState().messages).toEqual(historical)
+  })
+
+  it('preserves persona edits made while relationship evaluation is in flight', async () => {
+    let resolveEvaluation: ((value: string) => void) | undefined
+    mocks.invoke.mockImplementation((command: string) =>
+      command === 'evaluate_relationship'
+        ? new Promise<string>((resolve) => {
+            resolveEvaluation = resolve
+          })
+        : Promise.resolve(undefined),
+    )
+    const originalPersona = { ...DEFAULT_PERSONA, id: 'persona-1', relationshipStage: '刚认识' as const }
+    useSettingsStore.setState({
+      persona: originalPersona,
+      personas: [originalPersona],
+      activePersonaIndex: 0,
+    })
+    useChatStore.setState({
+      activePersonaId: originalPersona.id,
+      messages: [{ id: 'user-1', role: 'user', content: '你好', timestamp: 1 }],
+      userMsgCount: 1,
+    })
+
+    const evaluation = evaluateRelationshipProgress(originalPersona, aiSettings)
+    useSettingsStore.getState().setPersona({ ...originalPersona, name: '刚刚修改的新名字' })
+    resolveEvaluation?.('朋友')
+    await evaluation
+
+    expect(useSettingsStore.getState().persona).toMatchObject({
+      id: originalPersona.id,
+      name: '刚刚修改的新名字',
+      relationshipStage: '朋友',
+    })
   })
 })

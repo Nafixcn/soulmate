@@ -12,6 +12,18 @@ test('stores API credentials without exposing the saved value', async ({ page })
   await expect(page.getByTitle('移除 API Key')).toBeVisible()
 })
 
+test('closes settings with Escape and restores focus', async ({ page }) => {
+  await page.goto('/')
+
+  const settingsButton = page.getByTitle('设置')
+  await settingsButton.click()
+  await expect(page.getByRole('dialog', { name: '设置' })).toBeVisible()
+  await page.keyboard.press('Escape')
+
+  await expect(page.getByRole('dialog', { name: '设置' })).toBeHidden()
+  await expect(settingsButton).toBeFocused()
+})
+
 test('sends a message and completes the streamed reply', async ({ page }) => {
   await page.goto('/')
 
@@ -76,4 +88,30 @@ test('exports the complete conversation from SQLite', async ({ page }) => {
   const download = await downloadPromise
 
   expect(download.suggestedFilename()).toMatch(/^soulmate-chat-\d+\.md$/)
+})
+
+test('exports a complete portable backup from data settings', async ({ page }) => {
+  await page.goto('/')
+
+  await page.getByTitle('设置').click()
+  await page.getByRole('tab', { name: '数据' }).click()
+  const downloadPromise = page.waitForEvent('download')
+  await page.getByRole('button', { name: '导出完整备份' }).click()
+  const download = await downloadPromise
+
+  expect(download.suggestedFilename()).toMatch(/^soulmate-backup-.*\.json$/)
+  await expect(page.getByRole('status')).toContainText('完整备份已导出')
+})
+
+test('enables the optional app lock from data settings', async ({ page }) => {
+  await page.goto('/')
+
+  await page.getByTitle('设置').click()
+  await page.getByRole('tab', { name: '数据' }).click()
+  await page.getByLabel('PIN', { exact: true }).fill('1234')
+  await page.getByLabel('确认 PIN').fill('1234')
+  await page.getByRole('button', { name: '启用应用锁' }).click()
+
+  await expect(page.getByRole('status')).toContainText('应用锁已启用')
+  await expect(page.getByRole('button', { name: '关闭应用锁' })).toBeVisible()
 })

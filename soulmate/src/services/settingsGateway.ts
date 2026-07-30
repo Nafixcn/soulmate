@@ -13,11 +13,11 @@ export const settingsGateway = {
     return invoke('delete_persona', { personaId, settingsJson })
   },
 
-  hasApiKey(): Promise<boolean> {
-    return invoke<boolean>('has_api_key')
+  hasApiKey(endpoint: string): Promise<boolean> {
+    return invoke<boolean>('has_api_key', { endpoint })
   },
 
-  saveApiKey(apiKey: string): Promise<void> {
-    return invoke('save_api_key', { apiKey })
+  saveApiKey(endpoint: string, apiKey: string): Promise<void> {
+    return invoke('save_api_key', { endpoint, apiKey })
   },
 }
