@@ -2,7 +2,9 @@ import React from 'react'
 import { ArrowLeft, ArrowRight, Check, KeyRound, ShieldCheck, Sparkles } from 'lucide-react'
 import { memoryService } from '../services/memoryService'
 import { useSettingsStore } from '../store/settingsStore'
-import { API_PRESETS } from '../types'
+import { discoverLocalModels } from '../services/localModelService'
+import { getModelDisplayName, getModelProvider, getModelProviderIndex, MODEL_PROVIDERS } from '../domain/modelProvider'
+import { toUserMessage } from '../services/appError'
 
 type ConnectionState = 'idle' | 'testing' | 'success' | 'error'
 
@@ -24,8 +26,10 @@ export const Onboarding: React.FC = () => {
   const [connectionState, setConnectionState] = React.useState<ConnectionState>('idle')
   const [status, setStatus] = React.useState('')
   const [finishing, setFinishing] = React.useState(false)
-  const presetIndex = API_PRESETS.findIndex((preset) => preset.endpoint === aiSettings.endpoint)
-  const currentPreset = presetIndex >= 0 ? API_PRESETS[presetIndex] : API_PRESETS[API_PRESETS.length - 1]
+  const [localModels, setLocalModels] = React.useState<string[]>([])
+  const presetIndex = getModelProviderIndex(aiSettings.endpoint)
+  const currentPreset = getModelProvider(aiSettings.endpoint)
+  const localProvider = currentPreset.localProvider
   const canContinueProfile =
     userProfile.name.trim().length > 0 &&
     userProfile.preferredAddress.trim().length > 0 &&
@@ -34,12 +38,12 @@ export const Onboarding: React.FC = () => {
   const testConnection = async () => {
     setConnectionState('testing')
     setStatus('正在验证钥匙串和模型连接…')
-    if (apiKey.trim() && !(await setApiKey(apiKey))) {
+    if (!localProvider && apiKey.trim() && !(await setApiKey(apiKey))) {
       setConnectionState('error')
       setStatus('API Key 无法写入系统钥匙串')
       return
     }
-    if (!aiConfigured && !apiKey.trim()) {
+    if (!localProvider && !aiConfigured && !apiKey.trim()) {
       setConnectionState('error')
       setStatus('请先输入 API Key')
       return
@@ -51,7 +55,23 @@ export const Onboarding: React.FC = () => {
       setStatus('连接成功，可以开始聊天')
     } catch (error) {
       setConnectionState('error')
-      setStatus(error instanceof Error ? error.message : String(error))
+      setStatus(toUserMessage(error, '连接失败，请检查模型设置'))
+    }
+  }
+
+  const refreshLocalModels = async () => {
+    if (!localProvider) return
+    setConnectionState('testing')
+    setStatus('正在发现本地模型…')
+    try {
+      const models = await discoverLocalModels(localProvider)
+      setLocalModels(models)
+      if (!models.includes(aiSettings.model)) setAISettings({ model: models[0] })
+      setConnectionState('idle')
+      setStatus(`已发现 ${models.length} 个模型，请测试连接`)
+    } catch (error) {
+      setConnectionState('error')
+      setStatus(toUserMessage(error, '没有发现可用的本地模型'))
     }
   }
 
@@ -193,20 +213,20 @@ export const Onboarding: React.FC = () => {
             <label>
               模型服务商
               <select
-                value={presetIndex >= 0 ? presetIndex : API_PRESETS.length - 1}
+                value={presetIndex}
                 onChange={(event) => {
                   applyPreset(Number(event.target.value))
                   setConnectionState('idle')
                 }}
               >
-                {API_PRESETS.map((preset, index) => (
+                {MODEL_PROVIDERS.map((preset, index) => (
                   <option key={preset.name} value={index}>
                     {preset.name}
                   </option>
                 ))}
               </select>
             </label>
-            {currentPreset.name === '自定义' && (
+            {currentPreset.id === 'custom' && (
               <label>
                 API 地址
                 <input
@@ -218,29 +238,47 @@ export const Onboarding: React.FC = () => {
             )}
             <label>
               模型
-              {currentPreset.models.length > 0 ? (
+              {(localProvider ? localModels : currentPreset.models).length > 0 ? (
                 <select value={aiSettings.model} onChange={(event) => setAISettings({ model: event.target.value })}>
-                  {currentPreset.models.map((model) => (
-                    <option key={model}>{model}</option>
+                  {aiSettings.model &&
+                    !(localProvider ? localModels : currentPreset.models).includes(aiSettings.model) && (
+                      <option value={aiSettings.model}>当前保存的模型：{aiSettings.model}（不在推荐列表）</option>
+                    )}
+                  {(localProvider ? localModels : currentPreset.models).map((model) => (
+                    <option key={model} value={model}>
+                      {getModelDisplayName(model)}
+                    </option>
                   ))}
                 </select>
               ) : (
                 <input value={aiSettings.model} onChange={(event) => setAISettings({ model: event.target.value })} />
               )}
             </label>
-            <label>
-              API Key
-              <input
-                type="password"
-                value={apiKey}
-                onChange={(event) => {
-                  setApiKeyDraft(event.target.value)
-                  setConnectionState('idle')
-                }}
-                placeholder={aiConfigured ? '已安全保存，可直接测试' : '仅写入系统钥匙串'}
-                autoComplete="off"
-              />
-            </label>
+            {localProvider && (
+              <button
+                type="button"
+                className="connection-test-button"
+                onClick={() => void refreshLocalModels()}
+                disabled={connectionState === 'testing'}
+              >
+                发现本地模型
+              </button>
+            )}
+            {!localProvider && (
+              <label>
+                API Key
+                <input
+                  type="password"
+                  value={apiKey}
+                  onChange={(event) => {
+                    setApiKeyDraft(event.target.value)
+                    setConnectionState('idle')
+                  }}
+                  placeholder={aiConfigured ? '已安全保存，可直接测试' : '仅写入系统钥匙串'}
+                  autoComplete="off"
+                />
+              </label>
+            )}
             <button
               type="button"
               className="connection-test-button"

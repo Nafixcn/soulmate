@@ -9,6 +9,7 @@ import {
 import { prepareConversation } from './conversationService'
 import { conversationGateway } from './conversationGateway'
 import { speak } from './ttsService'
+import { isRetryableError, toUserMessage } from './appError'
 
 const MAX_RETRIES = 2
 const RETRY_DELAY_MS = 1500
@@ -25,6 +26,7 @@ interface ConversationTurnOptions {
   isCurrent: () => boolean
   onChunk: (content: string, thinking: string) => void
   onSpeakingChange: (speaking: boolean) => void
+  persistMessage?: boolean
 }
 
 export interface ConversationTurnResult {
@@ -33,7 +35,7 @@ export interface ConversationTurnResult {
 }
 
 export async function runConversationTurn(options: ConversationTurnOptions): Promise<ConversationTurnResult | null> {
-  const apiMessages = await prepareConversation({
+  const prepared = await prepareConversation({
     messages: options.messages,
     persona: options.persona,
     query: options.query,
@@ -52,7 +54,7 @@ export async function runConversationTurn(options: ConversationTurnOptions): Pro
 
     try {
       const completion = await conversationGateway.streamCompletion({
-        messages: apiMessages,
+        messages: prepared.messages,
         settings: options.aiSettings,
         requestId: options.requestId,
         signal: options.signal,
@@ -60,21 +62,27 @@ export async function runConversationTurn(options: ConversationTurnOptions): Pro
         onChunk: options.onChunk,
       })
       if (options.signal.aborted || !options.isCurrent()) return null
+      if (!completion.content.trim()) throw new Error('模型返回了空回复，请重试')
 
       const message: Message = {
         id: crypto.randomUUID(),
         role: 'assistant',
-        content: completion.content || '...',
+        content: completion.content,
         thinking: completion.thinking || undefined,
         timestamp: Date.now(),
+        memoryReferences: prepared.memories.map(({ id, content }) => ({ id, content })),
       }
       let persistenceError: string | null = null
-      try {
-        await conversationGateway.saveMessage(options.persona.id, message)
-      } catch (error) {
-        console.error('Failed to save AI message:', error)
-        persistenceError = '回复已生成，但保存失败，重启后可能丢失'
+      if (options.persistMessage !== false) {
+        try {
+          await conversationGateway.saveMessage(options.persona.id, message)
+        } catch (error) {
+          console.error('Failed to save AI message:', error)
+          persistenceError = '回复已生成，但保存失败，重启后可能丢失'
+        }
       }
+
+      if (options.signal.aborted || !options.isCurrent()) return null
 
       if (options.ttsSettings.autoPlay && options.ttsSettings.enabled) {
         options.onSpeakingChange(true)
@@ -84,10 +92,11 @@ export async function runConversationTurn(options: ConversationTurnOptions): Pro
       return { message, persistenceError }
     } catch (error) {
       lastError = error
+      if (!isRetryableError(error)) break
     }
   }
 
-  throw lastError instanceof Error ? lastError : new Error('发送失败，请检查网络和API设置')
+  throw new Error(toUserMessage(lastError, '发送失败，请检查网络和 API 设置'))
 }
 
 function waitForRetry(delay: number, signal: AbortSignal): Promise<void> {

@@ -3,7 +3,6 @@ import {
   AISettings,
   TTSSettings,
   Persona,
-  API_PRESETS,
   DEFAULT_PERSONA,
   DEFAULT_USER_PROFILE,
   ThemeColors,
@@ -24,6 +23,7 @@ import {
   type SettingsSnapshotInput,
 } from '../services/settingsPersistence'
 import { normalizePersonas } from '../domain/persona'
+import { DEFAULT_MODEL_PROVIDER, MODEL_PROVIDERS, normalizeSavedModel } from '../domain/modelProvider'
 
 interface SettingsStore {
   aiSettings: AISettings
@@ -34,6 +34,7 @@ interface SettingsStore {
   aiConfigured: boolean
   theme: ThemeColors
   themePresetIndex: number
+  appIcon: string
   persistenceError: string | null
   userProfile: UserProfile
   onboardingCompleted: boolean
@@ -47,6 +48,7 @@ interface SettingsStore {
   applyPreset: (index: number) => void
   applyThemePreset: (index: number) => void
   setTheme: (colors: ThemeColors) => void
+  setAppIcon: (icon: string) => void
   loadFromStorage: () => Promise<void>
   saveToStorage: () => Promise<boolean>
   clearPersistenceError: () => void
@@ -60,8 +62,8 @@ interface SettingsStore {
 }
 
 const defaultAI: AISettings = {
-  endpoint: API_PRESETS[0].endpoint,
-  model: API_PRESETS[0].models[0],
+  endpoint: DEFAULT_MODEL_PROVIDER.endpoint,
+  model: DEFAULT_MODEL_PROVIDER.models[0],
   temperature: 0.6,
   maxTokens: 1024,
   autoProgress: false,
@@ -100,6 +102,17 @@ const defaultGreetingSettings: GreetingSettings = {
 let saveTimer: ReturnType<typeof setTimeout> | null = null
 let persistenceBlockCount = 0
 let saveRequestedWhileBlocked = false
+// Read snapshots inside the queue, after preceding deletions have updated the store.
+let persistenceOperationQueue: Promise<void> = Promise.resolve()
+
+function enqueueSettingsPersistence<T>(operation: () => Promise<T>): Promise<T> {
+  const queued = persistenceOperationQueue.then(operation)
+  persistenceOperationQueue = queued.then(
+    () => undefined,
+    () => undefined,
+  )
+  return queued
+}
 
 function snapshotFromState(state: SettingsStore): SettingsSnapshotInput {
   return {
@@ -110,10 +123,21 @@ function snapshotFromState(state: SettingsStore): SettingsSnapshotInput {
     activePersonaIndex: state.activePersonaIndex,
     theme: state.theme,
     themePresetIndex: state.themePresetIndex,
+    appIcon: state.appIcon,
     userProfile: state.userProfile,
     onboardingCompleted: state.onboardingCompleted,
     greetingSettings: state.greetingSettings,
   }
+}
+
+function withoutPersona(state: SettingsStore, personaId: string) {
+  const personas = state.personas.filter((persona) => persona.id !== personaId)
+  const activeId = state.personas[state.activePersonaIndex]?.id
+  const activePersonaIndex = Math.max(
+    0,
+    personas.findIndex((persona) => persona.id === activeId),
+  )
+  return { personas, persona: personas[activePersonaIndex], activePersonaIndex }
 }
 
 function debouncedSave() {
@@ -146,9 +170,17 @@ function resumeDebouncedPersistence() {
 }
 
 async function refreshApiKeyStatus(endpoint: string): Promise<void> {
-  const configured = await hasApiKey(endpoint)
+  const configured = isLocalEndpoint(endpoint) || (await hasApiKey(endpoint))
   if (useSettingsStore.getState().aiSettings.endpoint === endpoint) {
     useSettingsStore.setState({ aiConfigured: configured })
+  }
+}
+
+function isLocalEndpoint(endpoint: string): boolean {
+  try {
+    return ['localhost', '127.0.0.1', '[::1]', '::1'].includes(new URL(endpoint).hostname)
+  } catch {
+    return false
   }
 }
 
@@ -161,6 +193,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
   aiConfigured: false,
   theme: { ...defaultTheme },
   themePresetIndex: 0,
+  appIcon: '✦',
   persistenceError: null,
   userProfile: { ...DEFAULT_USER_PROFILE },
   onboardingCompleted: false,
@@ -235,12 +268,16 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     return true
   },
   applyPreset: (index) => {
-    const preset = API_PRESETS[index]
+    const preset = MODEL_PROVIDERS[index]
     if (!preset) return
     const previousEndpoint = get().aiSettings.endpoint
-    const endpoint = preset.endpoint || previousEndpoint
+    const endpoint = preset.endpoint
     set((state) => ({
-      aiSettings: { ...state.aiSettings, endpoint, model: preset.models[0] || state.aiSettings.model },
+      aiSettings: {
+        ...state.aiSettings,
+        endpoint,
+        model: preset.models[0] || (preset.id === 'custom' ? '' : state.aiSettings.model),
+      },
       ...(endpoint !== previousEndpoint ? { aiConfigured: false } : {}),
     }))
     if (endpoint !== previousEndpoint) void refreshApiKeyStatus(endpoint)
@@ -254,6 +291,10 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
   },
   setTheme: (colors) => {
     set({ theme: { ...colors }, themePresetIndex: THEME_PRESETS.length - 1 })
+    debouncedSave()
+  },
+  setAppIcon: (icon) => {
+    set({ appIcon: icon.slice(0, 12) })
     debouncedSave()
   },
   addPersona: (input) => {
@@ -274,26 +315,37 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     debouncedSave()
   },
   removePersona: async (index) => {
-    const state = get()
-    if (state.personas.length <= 1 || !state.personas[index]) return false
-
-    const removedPersona = state.personas[index]
-    const personas = state.personas.filter((_, personaIndex) => personaIndex !== index)
-    let activePersonaIndex = state.activePersonaIndex
-    if (index === activePersonaIndex) activePersonaIndex = 0
-    else if (index < activePersonaIndex) activePersonaIndex--
-    const persona = personas[activePersonaIndex]
-    const nextState = { ...state, personas, persona, activePersonaIndex }
+    const removedPersonaId = get().personas[index]?.id
+    if (!removedPersonaId || get().personas.length <= 1) return false
 
     blockDebouncedPersistence()
     try {
-      await deletePersonaData(removedPersona.id, snapshotFromState(nextState))
-      set({ personas, persona, activePersonaIndex, persistenceError: null })
-      return true
-    } catch (error) {
-      console.error('Failed to delete persona:', error)
-      set({ persistenceError: '角色删除失败，聊天记录未被修改' })
-      return false
+      return await enqueueSettingsPersistence(async () => {
+        const state = get()
+        if (state.personas.length <= 1 || !state.personas.some((persona) => persona.id === removedPersonaId)) {
+          return false
+        }
+        try {
+          const nextState = { ...state, ...withoutPersona(state, removedPersonaId) }
+          await deletePersonaData(removedPersonaId, snapshotFromState(nextState))
+        } catch (error) {
+          console.error('Failed to delete persona:', error)
+          set({ persistenceError: '角色删除失败，聊天记录未被修改' })
+          return false
+        }
+
+        const latest = get()
+        set({ ...withoutPersona(latest, removedPersonaId), persistenceError: null })
+        if (latest !== state) {
+          try {
+            await saveSettingsSnapshot(snapshotFromState(get()))
+          } catch (error) {
+            console.error('Failed to save settings after persona deletion:', error)
+            set({ persistenceError: '角色已删除，但设置保存失败，请稍后重试' })
+          }
+        }
+        return true
+      })
     } finally {
       resumeDebouncedPersistence()
     }
@@ -307,6 +359,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
   loadFromStorage: async () => {
     let legacyApiKey = loadLegacyLocalApiKey()
     let loadedFromLocal = false
+    let modelMigrated = false
 
     try {
       const loaded = await loadSettingsSnapshot()
@@ -315,16 +368,26 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
         const data = loaded.snapshot
         const { apiKey, ...storedAISettings } = data.aiSettings || {}
         legacyApiKey = apiKey || legacyApiKey
+        const model = normalizeSavedModel(
+          storedAISettings.endpoint || defaultAI.endpoint,
+          storedAISettings.model || defaultAI.model,
+        )
+        modelMigrated = Boolean(storedAISettings.model && storedAISettings.model !== model)
         const storedPersonas = data.personas?.length ? data.personas : [data.persona || {}]
         const { personas, activeIndex } = normalizePersonas(storedPersonas, data.activePersonaIndex ?? 0)
         set({
-          aiSettings: { ...defaultAI, ...storedAISettings },
+          aiSettings: {
+            ...defaultAI,
+            ...storedAISettings,
+            model,
+          },
           ttsSettings: { ...defaultTTS, ...data.ttsSettings },
           persona: personas[activeIndex],
           personas,
           activePersonaIndex: activeIndex,
           theme: data.theme ? { ...defaultTheme, ...data.theme } : { ...defaultTheme },
           themePresetIndex: data.themePresetIndex ?? 0,
+          appIcon: typeof data.appIcon === 'string' ? data.appIcon.slice(0, 12) : '✦',
           userProfile: { ...DEFAULT_USER_PROFILE, ...data.userProfile },
           onboardingCompleted: data.onboardingCompleted ?? true,
           greetingSettings: { ...defaultGreetingSettings, ...data.greetingSettings },
@@ -336,7 +399,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     }
 
     const endpoint = get().aiSettings.endpoint
-    let configured = await hasApiKey(endpoint)
+    let configured = isLocalEndpoint(endpoint) || (await hasApiKey(endpoint))
     const legacyStoreApiKey = await loadLegacyApiKey()
     const migrationCandidate = configured ? '' : legacyApiKey || legacyStoreApiKey
 
@@ -348,23 +411,24 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     }
     set({ aiConfigured: configured })
 
-    if (loadedFromLocal) {
+    if (loadedFromLocal || modelMigrated) {
       const persisted = await get().saveToStorage()
-      if (persisted && (!legacyApiKey || configured)) clearLocalSettingsSnapshots()
+      if (loadedFromLocal && persisted && (!legacyApiKey || configured)) clearLocalSettingsSnapshots()
     } else if (configured && legacyApiKey) {
       clearLocalSettingsSnapshots()
     }
   },
-  saveToStorage: async () => {
-    try {
-      await saveSettingsSnapshot(snapshotFromState(get()))
-      set({ persistenceError: null })
-      return true
-    } catch (error) {
-      console.error('Failed to save settings:', error)
-      set({ persistenceError: '设置保存失败，请稍后重试' })
-      return false
-    }
-  },
+  saveToStorage: () =>
+    enqueueSettingsPersistence(async () => {
+      try {
+        await saveSettingsSnapshot(snapshotFromState(get()))
+        set({ persistenceError: null })
+        return true
+      } catch (error) {
+        console.error('Failed to save settings:', error)
+        set({ persistenceError: '设置保存失败，请稍后重试' })
+        return false
+      }
+    }),
   clearPersistenceError: () => set({ persistenceError: null }),
 }))

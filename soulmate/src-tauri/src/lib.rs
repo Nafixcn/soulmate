@@ -1,6 +1,7 @@
 #![allow(unexpected_cfgs)]
 
 mod ai;
+mod app_error;
 mod credentials;
 mod db;
 mod search;
@@ -13,7 +14,8 @@ pub struct AppState {
     pub db: Mutex<rusqlite::Connection>,
     pub startup_warning: Mutex<Option<db::StartupWarning>>,
     pub http_client: reqwest::Client,
-    pub cancelled_requests: std::sync::Arc<DashMap<String, bool>>,
+    pub cancelled_requests: std::sync::Arc<DashMap<String, tokio::sync::watch::Sender<bool>>>,
+    pub app_lock_throttle: Mutex<credentials::AppLockThrottle>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -42,6 +44,7 @@ pub fn run() {
                 startup_warning: Mutex::new(startup_warning),
                 http_client,
                 cancelled_requests: std::sync::Arc::new(DashMap::new()),
+                app_lock_throttle: Mutex::new(credentials::AppLockThrottle::default()),
             };
             app.manage(state);
 
@@ -53,6 +56,7 @@ pub fn run() {
             ai::evaluate_relationship,
             ai::test_ai_connection,
             ai::extract_memories,
+            ai::discover_local_models,
             credentials::has_api_key,
             credentials::save_api_key,
             credentials::has_app_lock,
@@ -62,10 +66,13 @@ pub fn run() {
             db::get_messages_from,
             db::get_all_messages,
             db::save_message,
+            db::save_message_if_source_exists,
             db::clear_messages,
             db::delete_messages_from,
             db::search_messages,
             db::list_memories,
+            db::get_memory_snapshot,
+            db::apply_extracted_memories,
             db::upsert_memory,
             db::delete_memory,
             db::set_memory_pinned,

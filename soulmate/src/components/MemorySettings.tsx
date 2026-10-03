@@ -1,5 +1,5 @@
 import React from 'react'
-import { Pin, PinOff, Plus, Trash2 } from 'lucide-react'
+import { Check, Eye, EyeOff, Pencil, Pin, PinOff, Plus, Trash2, X } from 'lucide-react'
 import { memoryService } from '../services/memoryService'
 import { useSettingsStore } from '../store/settingsStore'
 import type { Memory, MemoryCategory } from '../types'
@@ -11,12 +11,19 @@ const CATEGORY_LABELS: Record<MemoryCategory, string> = {
   boundary: '边界',
 }
 
+function currentTimestamp(): number {
+  return Date.now()
+}
+
 export const MemorySettings: React.FC = () => {
   const { persona, aiSettings, setAISettings, userProfile, setUserProfile, greetingSettings, setGreetingSettings } =
     useSettingsStore()
   const [memories, setMemories] = React.useState<Memory[]>([])
   const [draft, setDraft] = React.useState('')
   const [category, setCategory] = React.useState<MemoryCategory>('preference')
+  const [editingId, setEditingId] = React.useState<string | null>(null)
+  const [editContent, setEditContent] = React.useState('')
+  const [editCategory, setEditCategory] = React.useState<MemoryCategory>('preference')
   const [status, setStatus] = React.useState('')
   const [loading, setLoading] = React.useState(true)
 
@@ -56,7 +63,7 @@ export const MemorySettings: React.FC = () => {
   const addMemory = async () => {
     const content = draft.trim()
     if (!content) return
-    const timestamp = Date.now()
+    const timestamp = currentTimestamp()
     try {
       await memoryService.save({
         id: crypto.randomUUID(),
@@ -65,6 +72,7 @@ export const MemorySettings: React.FC = () => {
         content,
         confidence: 1,
         pinned: true,
+        enabled: true,
         createdAt: timestamp,
         updatedAt: timestamp,
       })
@@ -92,6 +100,31 @@ export const MemorySettings: React.FC = () => {
       setStatus('记忆已删除')
     } catch {
       setStatus('记忆删除失败')
+    }
+  }
+
+  const saveEdit = async (memory: Memory) => {
+    const content = editContent.trim()
+    if (!content) return
+    const timestamp = currentTimestamp()
+    try {
+      await memoryService.save({ ...memory, category: editCategory, content, updatedAt: timestamp })
+      setEditingId(null)
+      await reload()
+      setStatus('记忆已修正')
+    } catch {
+      setStatus('记忆修正失败，请检查是否与现有记忆重复')
+    }
+  }
+
+  const toggleEnabled = async (memory: Memory) => {
+    const timestamp = currentTimestamp()
+    try {
+      await memoryService.save({ ...memory, enabled: memory.enabled === false, updatedAt: timestamp })
+      await reload()
+      setStatus(memory.enabled === false ? '记忆已恢复使用' : '记忆已停用，后续回复不会引用')
+    } catch {
+      setStatus('记忆状态更新失败')
     }
   }
 
@@ -167,6 +200,9 @@ export const MemorySettings: React.FC = () => {
 
       <section className="settings-section">
         <h3>{persona.name}记住的事</h3>
+        <p className="setting-hint">
+          修正错误内容，或停用不想再用于后续回复的记忆。停用的记忆仍留在列表中，避免再次从相似消息中学习。
+        </p>
         <div className="memory-add-row">
           <select
             value={category}
@@ -205,12 +241,82 @@ export const MemorySettings: React.FC = () => {
         ) : (
           <div className="memory-list">
             {memories.map((memory) => (
-              <article key={memory.id} className="memory-item">
-                <div>
-                  <span className="memory-category">{CATEGORY_LABELS[memory.category]}</span>
-                  <p>{memory.content}</p>
-                </div>
+              <article key={memory.id} className={`memory-item ${memory.enabled === false ? 'memory-disabled' : ''}`}>
+                {editingId === memory.id ? (
+                  <div className="memory-edit-fields">
+                    <select
+                      value={editCategory}
+                      onChange={(event) => setEditCategory(event.target.value as MemoryCategory)}
+                      aria-label="修正记忆类别"
+                    >
+                      {Object.entries(CATEGORY_LABELS).map(([value, label]) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      value={editContent}
+                      onChange={(event) => setEditContent(event.target.value)}
+                      maxLength={500}
+                      aria-label="修正记忆内容"
+                    />
+                  </div>
+                ) : (
+                  <div>
+                    <span className="memory-category">{CATEGORY_LABELS[memory.category]}</span>
+                    {memory.enabled === false && <span className="memory-category"> · 已停用</span>}
+                    <p>{memory.content}</p>
+                  </div>
+                )}
                 <div className="memory-actions">
+                  {editingId === memory.id ? (
+                    <>
+                      <button
+                        type="button"
+                        className="icon-action"
+                        onClick={() => void saveEdit(memory)}
+                        aria-label="保存记忆修正"
+                        title="保存修正"
+                      >
+                        <Check size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        className="icon-action"
+                        onClick={() => setEditingId(null)}
+                        aria-label="取消记忆修正"
+                        title="取消"
+                      >
+                        <X size={16} />
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        className="icon-action"
+                        onClick={() => {
+                          setEditingId(memory.id)
+                          setEditContent(memory.content)
+                          setEditCategory(memory.category)
+                        }}
+                        title="修正记忆"
+                        aria-label="修正记忆"
+                      >
+                        <Pencil size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        className="icon-action"
+                        onClick={() => void toggleEnabled(memory)}
+                        title={memory.enabled === false ? '恢复使用记忆' : '停用记忆'}
+                        aria-label={memory.enabled === false ? '恢复使用记忆' : '停用记忆'}
+                      >
+                        {memory.enabled === false ? <Eye size={16} /> : <EyeOff size={16} />}
+                      </button>
+                    </>
+                  )}
                   <button
                     type="button"
                     className="icon-action"

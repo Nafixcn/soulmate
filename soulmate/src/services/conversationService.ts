@@ -18,6 +18,11 @@ interface PrepareConversationOptions {
   userProfile: UserProfile
 }
 
+export interface PreparedConversation {
+  messages: ApiMessage[]
+  memories: Memory[]
+}
+
 export async function prepareConversation({
   messages,
   persona,
@@ -25,7 +30,7 @@ export async function prepareConversation({
   useKnowledgeRetrieval,
   useMemory,
   userProfile,
-}: PrepareConversationOptions): Promise<ApiMessage[]> {
+}: PrepareConversationOptions): Promise<PreparedConversation> {
   let knowledgeResults: KnowledgeResult[] = []
   let memories: Memory[] = []
 
@@ -39,11 +44,18 @@ export async function prepareConversation({
 
   if (useMemory) {
     try {
-      memories = selectRelevantMemories(await memoryService.list(persona.id), query)
+      const recentUserMessages = messages
+        .filter((message) => message.role === 'user')
+        .slice(-4, -1)
+        .map((message) => message.content)
+      memories = selectRelevantMemories(await memoryService.list(persona.id), query, 6, recentUserMessages)
     } catch {
       // Memory retrieval is optional; local database errors should not block chat.
     }
   }
 
-  return buildConversationMessages(messages, persona, knowledgeResults, memories, userProfile)
+  return {
+    messages: buildConversationMessages(messages, persona, knowledgeResults, memories, userProfile),
+    memories,
+  }
 }

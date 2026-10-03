@@ -40,7 +40,7 @@ const ttsSettings: TTSSettings = {
 describe('conversation turn', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mocks.prepareConversation.mockResolvedValue([{ role: 'system', content: 'prompt' }])
+    mocks.prepareConversation.mockResolvedValue({ messages: [{ role: 'system', content: 'prompt' }], memories: [] })
     mocks.saveMessage.mockResolvedValue(undefined)
     mocks.speak.mockResolvedValue(undefined)
   })
@@ -77,6 +77,32 @@ describe('conversation turn', () => {
       expect.objectContaining({ role: 'assistant', content: '你好呀', thinking: '思考中' }),
     )
     expect(result?.persistenceError).toBeNull()
+  })
+
+  it('saves a snapshot of the memories supplied to a reply', async () => {
+    mocks.prepareConversation.mockResolvedValueOnce({
+      messages: [{ role: 'system', content: 'prompt with memory' }],
+      memories: [{ id: 'memory-1', content: '喜欢爵士乐' }],
+    })
+    mocks.streamCompletion.mockResolvedValueOnce({ content: '我们再听爵士乐吧', thinking: '' })
+
+    await runConversationTurn({
+      messages: [],
+      query: '听什么？',
+      persona: DEFAULT_PERSONA,
+      aiSettings,
+      ttsSettings,
+      requestId: 'request-memory',
+      signal: new AbortController().signal,
+      isCurrent: () => true,
+      onChunk: vi.fn(),
+      onSpeakingChange: vi.fn(),
+    })
+
+    expect(mocks.saveMessage).toHaveBeenCalledWith(
+      DEFAULT_PERSONA.id,
+      expect.objectContaining({ memoryReferences: [{ id: 'memory-1', content: '喜欢爵士乐' }] }),
+    )
   })
 
   it('does not restart a completion when cancelled during the retry delay', async () => {
@@ -125,6 +151,31 @@ describe('conversation turn', () => {
 
     expect(result?.message.content).toBe('已经收到')
     expect(result?.persistenceError).toBe('回复已生成，但保存失败，重启后可能丢失')
+  })
+
+  it('retries an empty completion instead of persisting a placeholder', async () => {
+    vi.useFakeTimers()
+    mocks.streamCompletion
+      .mockResolvedValueOnce({ content: '  ', thinking: '' })
+      .mockResolvedValueOnce({ content: '真正的回复', thinking: '' })
+
+    const turn = runConversationTurn({
+      messages: [],
+      query: '你好',
+      persona: DEFAULT_PERSONA,
+      aiSettings,
+      ttsSettings,
+      requestId: 'request-empty',
+      signal: new AbortController().signal,
+      isCurrent: () => true,
+      onChunk: vi.fn(),
+      onSpeakingChange: vi.fn(),
+    })
+    await vi.advanceTimersByTimeAsync(1500)
+
+    expect((await turn)?.message.content).toBe('真正的回复')
+    expect(mocks.streamCompletion).toHaveBeenCalledTimes(2)
+    expect(mocks.saveMessage).toHaveBeenCalledTimes(1)
   })
 
   it('starts speech only when automatic playback is enabled', async () => {

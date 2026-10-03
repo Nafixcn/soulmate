@@ -1,6 +1,28 @@
+use serde::Serialize;
+use std::time::{Duration, Instant};
+use tauri::State;
+
+use crate::AppState;
+
 const SERVICE: &str = "com.soulmate.desktop";
 const LEGACY_API_KEY_ACCOUNT: &str = "ai-api-key";
 const APP_LOCK_ACCOUNT: &str = "app-lock-pin";
+const FREE_ATTEMPTS: u32 = 4;
+const INITIAL_COOLDOWN_SECS: u64 = 30;
+const MAX_COOLDOWN_SECS: u64 = 15 * 60;
+
+#[derive(Default)]
+pub struct AppLockThrottle {
+    failed_attempts: u32,
+    blocked_until: Option<Instant>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VerifyAppLockResult {
+    unlocked: bool,
+    retry_after_ms: u64,
+}
 
 fn api_key_entry(account: &str) -> Result<keyring::Entry, String> {
     keyring::Entry::new(SERVICE, account).map_err(|error| error.to_string())
@@ -60,26 +82,102 @@ pub fn has_app_lock() -> Result<bool, String> {
 }
 
 #[tauri::command]
-pub fn set_app_lock(pin: String) -> Result<(), String> {
+pub fn set_app_lock(state: State<'_, AppState>, pin: String) -> Result<(), String> {
     let entry = api_key_entry(APP_LOCK_ACCOUNT)?;
     if pin.is_empty() {
-        return match entry.delete_credential() {
+        let result = match entry.delete_credential() {
             Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
             Err(error) => Err(error.to_string()),
         };
+        if result.is_ok() {
+            reset_app_lock_throttle(&state)?;
+        }
+        return result;
     }
     validate_app_lock_pin(&pin)?;
-    entry.set_password(&pin).map_err(|error| error.to_string())
+    entry
+        .set_password(&pin)
+        .map_err(|error| error.to_string())?;
+    reset_app_lock_throttle(&state)
 }
 
 #[tauri::command]
-pub fn verify_app_lock(pin: String) -> Result<bool, String> {
+pub fn verify_app_lock(
+    state: State<'_, AppState>,
+    pin: String,
+) -> Result<VerifyAppLockResult, String> {
     validate_app_lock_pin(&pin)?;
+    let now = Instant::now();
+    let mut throttle = state
+        .app_lock_throttle
+        .lock()
+        .map_err(|_| "应用锁状态不可用".to_string())?;
+
+    let retry_after_ms = remaining_cooldown_ms(&throttle, now);
+    if retry_after_ms > 0 {
+        return Ok(VerifyAppLockResult {
+            unlocked: false,
+            retry_after_ms,
+        });
+    }
+
     match api_key_entry(APP_LOCK_ACCOUNT)?.get_password() {
-        Ok(expected) => Ok(constant_time_equal(expected.as_bytes(), pin.as_bytes())),
-        Err(keyring::Error::NoEntry) => Ok(true),
+        Ok(expected) if constant_time_equal(expected.as_bytes(), pin.as_bytes()) => {
+            *throttle = AppLockThrottle::default();
+            Ok(VerifyAppLockResult {
+                unlocked: true,
+                retry_after_ms: 0,
+            })
+        }
+        Ok(_) => Ok(VerifyAppLockResult {
+            unlocked: false,
+            retry_after_ms: register_failed_attempt(&mut throttle, now),
+        }),
+        Err(keyring::Error::NoEntry) => {
+            *throttle = AppLockThrottle::default();
+            Ok(VerifyAppLockResult {
+                unlocked: true,
+                retry_after_ms: 0,
+            })
+        }
         Err(error) => Err(error.to_string()),
     }
+}
+
+fn reset_app_lock_throttle(state: &State<'_, AppState>) -> Result<(), String> {
+    let mut throttle = state
+        .app_lock_throttle
+        .lock()
+        .map_err(|_| "应用锁状态不可用".to_string())?;
+    *throttle = AppLockThrottle::default();
+    Ok(())
+}
+
+fn remaining_cooldown_ms(throttle: &AppLockThrottle, now: Instant) -> u64 {
+    throttle
+        .blocked_until
+        .and_then(|until| until.checked_duration_since(now))
+        .map(|remaining| remaining.as_millis().min(u128::from(u64::MAX)) as u64)
+        .unwrap_or_default()
+}
+
+fn register_failed_attempt(throttle: &mut AppLockThrottle, now: Instant) -> u64 {
+    throttle.failed_attempts = throttle.failed_attempts.saturating_add(1);
+    if throttle.failed_attempts <= FREE_ATTEMPTS {
+        throttle.blocked_until = None;
+        return 0;
+    }
+
+    let exponent = throttle
+        .failed_attempts
+        .saturating_sub(FREE_ATTEMPTS + 1)
+        .min(5);
+    let seconds = INITIAL_COOLDOWN_SECS
+        .saturating_mul(1_u64 << exponent)
+        .min(MAX_COOLDOWN_SECS);
+    let cooldown = Duration::from_secs(seconds);
+    throttle.blocked_until = now.checked_add(cooldown);
+    cooldown.as_millis() as u64
 }
 
 fn migrate_legacy_api_key(account: &str) -> Result<Option<String>, String> {
@@ -119,7 +217,11 @@ fn constant_time_equal(left: &[u8], right: &[u8]) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{account_for_endpoint, constant_time_equal, validate_app_lock_pin};
+    use super::{
+        account_for_endpoint, constant_time_equal, register_failed_attempt, remaining_cooldown_ms,
+        validate_app_lock_pin, AppLockThrottle,
+    };
+    use std::time::{Duration, Instant};
 
     #[test]
     fn derives_stable_accounts_per_provider_host() {
@@ -155,5 +257,25 @@ mod tests {
         assert!(constant_time_equal(b"1234", b"1234"));
         assert!(!constant_time_equal(b"1234", b"1235"));
         assert!(!constant_time_equal(b"1234", b"12345"));
+    }
+
+    #[test]
+    fn throttles_repeated_app_lock_failures_with_an_increasing_cooldown() {
+        let started = Instant::now();
+        let mut throttle = AppLockThrottle::default();
+
+        for _ in 0..4 {
+            assert_eq!(register_failed_attempt(&mut throttle, started), 0);
+        }
+        assert_eq!(register_failed_attempt(&mut throttle, started), 30_000);
+        assert!(remaining_cooldown_ms(&throttle, started + Duration::from_secs(10)) >= 19_999);
+        assert_eq!(
+            remaining_cooldown_ms(&throttle, started + Duration::from_secs(31)),
+            0
+        );
+        assert_eq!(
+            register_failed_attempt(&mut throttle, started + Duration::from_secs(31)),
+            60_000
+        );
     }
 }

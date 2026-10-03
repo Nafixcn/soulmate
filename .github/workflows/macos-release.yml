@@ -53,6 +53,8 @@ jobs:
           workflowArtifactNamePattern: soulmate-smoke-${{ matrix.target }}-[bundle]
           uploadUpdaterJson: false
           uploadUpdaterSignatures: false
+      - name: Launch packaged application smoke test
+        run: ./scripts/smoke-launch-macos-bundle.sh "${{ matrix.target }}"
 
   release:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
@@ -84,13 +86,21 @@ jobs:
           key: macos-${{ matrix.target }}
       - name: Verify release tag and application versions
         run: node scripts/check-version.mjs --tag "${GITHUB_REF_NAME}"
+      - name: Require Apple signing and notarization credentials
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: ./scripts/require-apple-release-credentials.sh
       - run: npm ci
         working-directory: soulmate
       - name: Build bundle and update draft release
         uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Optional Apple Developer signing and notarization credentials.
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
@@ -108,3 +118,5 @@ jobs:
           generateReleaseNotes: true
           uploadUpdaterJson: false
           uploadUpdaterSignatures: false
+      - name: Verify signed and notarized application bundle
+        run: ./scripts/verify-macos-bundle.sh "${{ matrix.target }}"

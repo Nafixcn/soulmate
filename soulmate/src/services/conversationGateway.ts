@@ -38,6 +38,10 @@ export const conversationGateway = {
     return invoke('save_message', { personaId, message })
   },
 
+  saveMessageIfSourceExists(personaId: string, sourceMessageId: string, message: Message): Promise<boolean> {
+    return invoke<boolean>('save_message_if_source_exists', { personaId, sourceMessageId, message })
+  },
+
   clearMessages(personaId: string): Promise<void> {
     return invoke('clear_messages', { personaId })
   },
@@ -65,7 +69,7 @@ export const conversationGateway = {
     return invoke<RelationshipEvaluation>('evaluate_relationship', {
       endpoint: settings.endpoint,
       model: settings.model,
-      messagesJson: JSON.stringify(messages),
+      messages,
     })
   },
 
@@ -97,7 +101,7 @@ export const conversationGateway = {
     }
 
     await invoke('send_message', {
-      messagesJson: JSON.stringify(messages),
+      messages,
       endpoint: settings.endpoint,
       model: settings.model,
       temperature: settings.temperature,

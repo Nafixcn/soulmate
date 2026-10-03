@@ -16,6 +16,7 @@ export interface SettingsSnapshot {
   activePersonaIndex?: number
   theme?: Partial<ThemeColors>
   themePresetIndex?: number
+  appIcon?: string
   userProfile?: Partial<UserProfile>
   onboardingCompleted?: boolean
   greetingSettings?: Partial<GreetingSettings>
@@ -29,6 +30,7 @@ export interface SettingsSnapshotInput {
   activePersonaIndex: number
   theme: ThemeColors
   themePresetIndex: number
+  appIcon: string
   userProfile?: UserProfile
   onboardingCompleted?: boolean
   greetingSettings?: GreetingSettings
@@ -41,6 +43,7 @@ export interface LoadedSettingsSnapshot {
 
 let tauriStore: Awaited<ReturnType<typeof load>> | null = null
 let storeLoading: Promise<void> | null = null
+let persistenceQueue: Promise<void> = Promise.resolve()
 
 export async function loadSettingsSnapshot(): Promise<LoadedSettingsSnapshot | null> {
   try {
@@ -69,8 +72,9 @@ export async function loadSettingsSnapshot(): Promise<LoadedSettingsSnapshot | n
   }
 }
 
-export async function saveSettingsSnapshot(snapshot: SettingsSnapshotInput): Promise<void> {
-  await settingsGateway.saveSettings(JSON.stringify(snapshot))
+export function saveSettingsSnapshot(snapshot: SettingsSnapshotInput): Promise<void> {
+  const settingsJson = JSON.stringify(snapshot)
+  return enqueuePersistence(() => settingsGateway.saveSettings(settingsJson))
 }
 
 export function clearLocalSettingsSnapshots(): void {
@@ -121,8 +125,15 @@ export async function clearLegacyApiKey(): Promise<void> {
   }
 }
 
-export async function deletePersonaData(personaId: string, snapshot: SettingsSnapshotInput): Promise<void> {
-  await settingsGateway.deletePersona(personaId, JSON.stringify(snapshot))
+export function deletePersonaData(personaId: string, snapshot: SettingsSnapshotInput): Promise<void> {
+  const settingsJson = JSON.stringify(snapshot)
+  return enqueuePersistence(() => settingsGateway.deletePersona(personaId, settingsJson))
+}
+
+function enqueuePersistence(operation: () => Promise<void>): Promise<void> {
+  const queued = persistenceQueue.catch(() => undefined).then(operation)
+  persistenceQueue = queued.catch(() => undefined)
+  return queued
 }
 
 async function getStore() {

@@ -11,7 +11,7 @@ import {
   saveSettingsSnapshot,
   type SettingsSnapshotInput,
 } from './settingsPersistence'
-import type { AISettings, Persona, TTSSettings, ThemeColors } from '../types'
+import { DEFAULT_PERSONA, type AISettings, type Persona, type TTSSettings, type ThemeColors } from '../types'
 
 const mocks = vi.hoisted(() => ({
   invoke: vi.fn(),
@@ -48,6 +48,7 @@ const ttsSettings: TTSSettings = {
 }
 
 const persona: Persona = {
+  ...DEFAULT_PERSONA,
   id: 'persona-1',
   name: '灵伴',
   age: 20,
@@ -81,6 +82,7 @@ const snapshot: SettingsSnapshotInput = {
   activePersonaIndex: 0,
   theme,
   themePresetIndex: 0,
+  appIcon: '✦',
 }
 
 describe('settings persistence', () => {
@@ -104,6 +106,27 @@ describe('settings persistence', () => {
       settingsJson: JSON.stringify(snapshot),
     })
     expect(JSON.stringify(snapshot)).not.toContain('apiKey')
+  })
+
+  it('serializes writes so an older snapshot cannot finish after a newer one', async () => {
+    let finishFirst: (() => void) | undefined
+    mocks.invoke.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishFirst = resolve
+        }),
+    )
+    const older = saveSettingsSnapshot({ ...snapshot, aiSettings: { ...aiSettings, model: 'older' } })
+    const newer = saveSettingsSnapshot({ ...snapshot, aiSettings: { ...aiSettings, model: 'newer' } })
+
+    await vi.waitFor(() => expect(mocks.invoke).toHaveBeenCalledTimes(1))
+    finishFirst?.()
+    await older
+    await newer
+
+    expect(mocks.invoke).toHaveBeenNthCalledWith(2, 'save_settings', {
+      settingsJson: expect.stringContaining('"model":"newer"'),
+    })
   })
 
   it('loads settings from SQLite before local migration data', async () => {

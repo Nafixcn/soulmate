@@ -44,8 +44,9 @@ describe('prepareConversation', () => {
       userProfile: DEFAULT_USER_PROFILE,
     })
 
-    expect(messages[0].content).toContain('用户喜欢爵士音乐和钢琴')
-    expect(messages[0].content).not.toContain('用户不喜欢吃香菜')
+    expect(messages.messages[0].content).toContain('用户喜欢爵士音乐和钢琴')
+    expect(messages.messages[0].content).not.toContain('用户不喜欢吃香菜')
+    expect(messages.memories.map((item) => item.id)).toEqual(['music'])
   })
 
   it('keeps chat available when local memory retrieval fails', async () => {
@@ -60,6 +61,6 @@ describe('prepareConversation', () => {
         useMemory: true,
         userProfile: DEFAULT_USER_PROFILE,
       }),
-    ).resolves.toHaveLength(1)
+    ).resolves.toMatchObject({ memories: [], messages: [{ role: 'system' }] })
   })
 })

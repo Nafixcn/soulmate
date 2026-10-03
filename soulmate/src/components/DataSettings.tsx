@@ -11,6 +11,7 @@ export const DataSettings: React.FC<Props> = ({ idPrefix }) => {
   const [hasLock, setHasLock] = useState(false)
   const [pin, setPin] = useState('')
   const [confirmPin, setConfirmPin] = useState('')
+  const [backupPassword, setBackupPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -50,12 +51,16 @@ export const DataSettings: React.FC<Props> = ({ idPrefix }) => {
   }
 
   const handleExport = async () => {
+    if (backupPassword && backupPassword.length < 8) {
+      setError('备份密码至少需要 8 个字符')
+      return
+    }
     setBusy(true)
     setError(null)
     setStatus(null)
     try {
-      await exportPortableBackup()
-      setStatus('完整备份已导出')
+      await exportPortableBackup(backupPassword)
+      setStatus(backupPassword ? '加密备份已导出，请妥善保存密码' : '明文备份已导出')
     } catch (exportError) {
       console.error('Failed to export portable backup:', exportError)
       setError('完整备份导出失败')
@@ -70,7 +75,7 @@ export const DataSettings: React.FC<Props> = ({ idPrefix }) => {
     setError(null)
     setStatus(null)
     try {
-      const summary = await importPortableBackup(file)
+      const summary = await importPortableBackup(file, backupPassword)
       setStatus(
         `已导入 ${summary.personaCount} 个角色、${summary.messageCount} 条消息、${summary.memoryCount} 条记忆，正在重新加载`,
       )
@@ -90,6 +95,21 @@ export const DataSettings: React.FC<Props> = ({ idPrefix }) => {
         <h3 id={`${idPrefix}-backup-title`}>
           <DatabaseBackup size={16} aria-hidden="true" /> 数据备份
         </h3>
+        <p className="data-settings-note">
+          备份包含私密聊天与记忆。设置密码后会在本机使用 AES-256-GCM 加密；密码不会被保存，也无法找回。
+        </p>
+        <div className="form-group">
+          <label htmlFor={`${idPrefix}-backup-password`}>备份密码（建议设置）</label>
+          <input
+            id={`${idPrefix}-backup-password`}
+            type="password"
+            autoComplete="new-password"
+            value={backupPassword}
+            minLength={8}
+            onChange={(event) => setBackupPassword(event.target.value)}
+            placeholder="至少 8 个字符；导入加密备份时也填在这里"
+          />
+        </div>
         <div className="data-settings-actions">
           <button type="button" className="tag active" onClick={() => void handleExport()} disabled={busy}>
             <Download size={14} aria-hidden="true" /> 导出完整备份

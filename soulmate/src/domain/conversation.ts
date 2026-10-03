@@ -57,17 +57,38 @@ export function shouldRetrieveKnowledge(content: string): boolean {
   return KNOWLEDGE_QUERY_PATTERN.test(content)
 }
 
-export function selectRelevantMemories(memories: Memory[], query: string, limit = 6): Memory[] {
+export function selectRelevantMemories(
+  memories: Memory[],
+  query: string,
+  limit = 6,
+  recentUserMessages: string[] = [],
+): Memory[] {
   if (limit <= 0) return []
 
   const queryTokens = textTokens(query)
+  const recentTokens = textTokens(recentUserMessages.slice(-3).join(' '))
+  const recallsPastEvent = /上次|之前|那件事|那次|后来|当时|前几天|还记得/.test(query)
   return memories
+    .filter((memory) => memory.enabled !== false)
     .map((memory) => {
-      const overlap = [...textTokens(memory.content)].filter((token) => queryTokens.has(token)).length
-      const score = (memory.pinned ? 10_000 : 0) + overlap * 100 + memory.confidence * 10 + memory.updatedAt / 1e13
-      return { memory, score }
+      const tokens = textTokens(memory.content)
+      const directOverlap = [...tokens].filter((token) => queryTokens.has(token)).length
+      const contextOverlap = [...tokens].filter((token) => recentTokens.has(token)).length
+      const eventRecall = recallsPastEvent && memory.category === 'event'
+      const score =
+        (memory.pinned ? 10_000 : 0) +
+        (memory.category === 'boundary' ? 9_000 : 0) +
+        directOverlap * 100 +
+        contextOverlap * 30 +
+        (eventRecall ? 20 : 0) +
+        memory.confidence * 10 +
+        memory.updatedAt / 1e13
+      return { memory, score, directOverlap, contextOverlap, eventRecall }
     })
-    .filter(({ memory, score }) => memory.pinned || score >= 100)
+    .filter(
+      ({ memory, directOverlap, contextOverlap, eventRecall }) =>
+        memory.pinned || memory.category === 'boundary' || directOverlap > 0 || contextOverlap > 0 || eventRecall,
+    )
     .sort((left, right) => right.score - left.score)
     .slice(0, limit)
     .map(({ memory }) => memory)
@@ -81,8 +102,15 @@ export function buildConversationMessages(
   userProfile?: UserProfile,
 ): ApiMessage[] {
   const contextMessages = messages.slice(-CONTEXT_WINDOW)
+  const conversationText = [
+    ...contextMessages.slice(-6).map((message) => message.content),
+    knowledgeResults.map((result) => result.title).join(' '),
+  ].join('\n')
   const systemPrompt = appendKnowledgeContext(
-    appendMemoryContext(buildSystemPrompt(persona, userProfile), memories),
+    appendMemoryContext(
+      appendLorebookContext(buildSystemPrompt(persona, userProfile), persona, conversationText),
+      memories,
+    ),
     knowledgeResults,
   )
 
@@ -134,21 +162,51 @@ function buildSystemPrompt(persona: Persona, userProfile?: UserProfile): string 
       }${userProfile.boundaries.trim() ? `交流边界：${userProfile.boundaries.trim()}。` : ''}`
     : `跟${relationshipLabel}聊天中。称呼对方为“${nickname}”。`
 
+  const characterContext = [
+    persona.description.trim() ? `角色背景：${persona.description.trim()}` : '',
+    persona.scenario.trim() ? `当前场景：${persona.scenario.trim()}` : '',
+    persona.firstMessage.trim() ? `开场表达参考：${persona.firstMessage.trim()}` : '',
+    persona.exampleDialogue.trim() ? `表达示例：\n${persona.exampleDialogue.trim()}` : '',
+    persona.systemPrompt.trim() ? `角色补充指令：${persona.systemPrompt.trim()}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n')
+
   return `你是${persona.name}，${persona.age}岁，性格${persona.personality}（${personalityDescription}）。
 ${userContext}你的爱好：${persona.hobby}。说话风格：${persona.speakingStyle}。${RELATIONSHIP_TIPS[persona.relationshipStage]}
+${characterContext}
 
-【禁止事项 - 极其重要】
-1. 绝对不编造故事、经历、事实、新闻、数据
-2. 不知道的事就说不知道，不要假装知道
-3. 不说"我查了一下""我搜了一下""我刚刚看到"
-4. 不编造自己的过去、童年、家庭、工作
-5. 不谈论科技、医学、法律、金融等专业话题
-6. 只聊日常：心情、天气、美食、电影、音乐、爱好、生活小事
+【交流原则】
+- 不编造事实、新闻、数据或自己并不存在的现实经历；不确定时坦率说明
+- 可以讨论各种话题，但医学、法律、金融等高风险问题只提供一般信息，不冒充专业人士下结论
+- 尊重对方的交流边界，不控制、贬低、施压，也不把陪伴说成对现实人际关系的替代
 
-【回复要求】
-- 2-4句自然口语中文
-- 严格按你的人设说话
-- 用"${nickname}"称呼对方${persona.emoji}`
+【组织回复】
+先在内部理解对方真正想表达的事和当下情绪，再组织最终回复；不要展示分析过程或思维链。
+1. 先回应对方最在意的那一点，避免机械复述整句话
+2. 有情绪时先自然接住情绪，再给具体、可执行的回应；不要只说空泛安慰
+3. 只有能让对话自然继续时才问一个简短问题，不要每次都反问
+4. 简单消息简短回应，复杂问题可以分点说明；不要固定成相同句数和模板
+5. 严格保持人设，但少用重复口头禅、昵称和表情，不要每句话都撒娇
+6. 语言像熟悉的人在聊天：自然、具体、有停顿感，不写客服腔或总结报告
+
+只输出给对方看的最终回复。需要称呼时使用“${nickname}”，表情可偶尔使用${persona.emoji}`
+}
+
+function appendLorebookContext(systemPrompt: string, persona: Persona, conversationText: string): string {
+  const normalized = conversationText.toLocaleLowerCase()
+  const entries = persona.lorebook
+    .filter(
+      (entry) =>
+        entry.enabled &&
+        entry.content.trim() &&
+        entry.keywords.some((keyword) => normalized.includes(keyword.toLocaleLowerCase())),
+    )
+    .sort((left, right) => right.priority - left.priority)
+    .slice(0, 6)
+  if (entries.length === 0) return systemPrompt
+  const content = entries.map((entry) => `- ${entry.name}：${entry.content.trim()}`).join('\n')
+  return `${systemPrompt}\n\n【当前触发的世界设定】\n${content}\n仅在相关时使用这些设定，不要向用户解释关键词触发机制。`
 }
 
 function appendMemoryContext(systemPrompt: string, memories: Memory[]): string {

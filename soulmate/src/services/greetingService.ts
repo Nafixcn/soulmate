@@ -28,18 +28,41 @@ export function buildGroundedGreeting(context: GreetingContext): string {
   return `晚上好，${address}。今天有什么想和我说的吗？`
 }
 
-export function scheduleDailyGreetings(settings: GreetingSettings, onGreeting: GreetingHandler): () => void {
+export function scheduleDailyGreetings(
+  settings: GreetingSettings,
+  onGreeting: GreetingHandler,
+  scheduleKey = 'default',
+): () => void {
   if (!settings.enabled || settings.dailyCount <= 0) return () => undefined
 
-  const timerIds = new Set<ReturnType<typeof setTimeout>>()
-  const hours = pickDistinctAllowedHours(settings.dailyCount, settings.quietStart, settings.quietEnd)
-  for (const hour of hours) {
-    scheduleNext(hour, Math.floor(Math.random() * 50), onGreeting, timerIds)
+  const hours = pickSpreadAllowedHours(settings.dailyCount, settings.quietStart, settings.quietEnd)
+  const markerKey = `soulmate_greeting_slot_${scheduleKey}`
+  const checkSchedule = () => {
+    const now = new Date()
+    if (isQuietHour(now.getHours(), settings.quietStart, settings.quietEnd)) return
+    const dueSlot = hours
+      .map((hour, index) => ({ hour, minute: 8 + ((index * 17) % 44) }))
+      .filter(({ hour, minute }) => hour < now.getHours() || (hour === now.getHours() && minute <= now.getMinutes()))
+      .pop()
+    if (!dueSlot) return
+    const marker = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}:${dueSlot.hour}`
+    if (localStorage.getItem(markerKey) === marker) return
+    localStorage.setItem(markerKey, marker)
+    onGreeting()
   }
 
+  checkSchedule()
+  const intervalId = window.setInterval(checkSchedule, 30_000)
+  const onVisible = () => {
+    if (!document.hidden) checkSchedule()
+  }
+  document.addEventListener('visibilitychange', onVisible)
+  window.addEventListener('focus', checkSchedule)
+
   return () => {
-    timerIds.forEach(clearTimeout)
-    timerIds.clear()
+    window.clearInterval(intervalId)
+    document.removeEventListener('visibilitychange', onVisible)
+    window.removeEventListener('focus', checkSchedule)
   }
 }
 
@@ -56,31 +79,16 @@ export function showGreetingNotification(body: string): void {
   }
 }
 
-function scheduleNext(
-  hour: number,
-  minute: number,
-  onGreeting: GreetingHandler,
-  timerIds: Set<ReturnType<typeof setTimeout>>,
-): void {
-  const now = new Date()
-  const target = new Date(now)
-  target.setHours(hour, minute, 0, 0)
-  if (target <= now) target.setDate(target.getDate() + 1)
-
-  const timerId = setTimeout(() => {
-    timerIds.delete(timerId)
-    onGreeting()
-    scheduleNext(hour, minute, onGreeting, timerIds)
-  }, target.getTime() - now.getTime())
-  timerIds.add(timerId)
-}
-
-function pickDistinctAllowedHours(count: number, quietStart: number, quietEnd: number): number[] {
+function pickSpreadAllowedHours(count: number, quietStart: number, quietEnd: number): number[] {
   const allowed = Array.from({ length: 24 }, (_, hour) => hour).filter(
     (hour) => !isQuietHour(hour, quietStart, quietEnd),
   )
-  const shuffled = allowed.sort(() => Math.random() - 0.5)
-  return shuffled.slice(0, Math.min(count, allowed.length)).sort((left, right) => left - right)
+  const targetCount = Math.min(count, allowed.length)
+  if (targetCount === 0) return []
+  return Array.from({ length: targetCount }, (_, index) => {
+    const allowedIndex = Math.floor(((index + 0.5) * allowed.length) / targetCount)
+    return allowed[Math.min(allowedIndex, allowed.length - 1)]
+  })
 }
 
 function isQuietHour(hour: number, quietStart: number, quietEnd: number): boolean {

@@ -4,6 +4,20 @@ export interface Message {
   content: string
   thinking?: string
   timestamp: number
+  alternatives?: AssistantAlternative[]
+  activeAlternative?: number
+  memoryReferences?: MemoryReference[]
+}
+
+export interface AssistantAlternative {
+  content: string
+  thinking?: string
+  memoryReferences?: MemoryReference[]
+}
+
+export interface MemoryReference {
+  id: string
+  content: string
 }
 
 export type MemoryCategory = 'profile' | 'preference' | 'event' | 'boundary'
@@ -16,8 +30,16 @@ export interface Memory {
   sourceMessageId?: string
   confidence: number
   pinned: boolean
+  enabled?: boolean
   createdAt: number
   updatedAt: number
+}
+
+export type RelationshipStage = '刚认识' | '朋友' | '暧昧' | '热恋' | '老夫老妻'
+
+export interface StageAppearance {
+  label: string
+  icon: string
 }
 
 export interface Persona {
@@ -28,11 +50,29 @@ export interface Persona {
   hobby: string
   nickname: string
   speakingStyle: string
-  relationshipStage: '刚认识' | '朋友' | '暧昧' | '热恋' | '老夫老妻'
+  relationshipStage: RelationshipStage
+  stageAppearance?: Partial<Record<RelationshipStage, StageAppearance>>
   emoji: string
   hairColor: string
   eyeColor: string
   avatar: string
+  description: string
+  scenario: string
+  firstMessage: string
+  exampleDialogue: string
+  systemPrompt: string
+  creator: string
+  tags: string[]
+  lorebook: LorebookEntry[]
+}
+
+export interface LorebookEntry {
+  id: string
+  name: string
+  keywords: string[]
+  content: string
+  enabled: boolean
+  priority: number
 }
 
 export interface UserProfile {
@@ -183,40 +223,6 @@ export const THEME_PRESETS: { name: string; colors: ThemeColors }[] = [
   },
 ]
 
-export const API_PRESETS: { name: string; endpoint: string; models: string[] }[] = [
-  {
-    name: 'DeepSeek',
-    endpoint: 'https://api.deepseek.com/v1/chat/completions',
-    models: ['deepseek-chat', 'deepseek-reasoner', 'deepseek-v4-pro', 'deepseek-v4-flash'],
-  },
-  {
-    name: 'OpenAI',
-    endpoint: 'https://api.openai.com/v1/chat/completions',
-    models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4.1', 'o4-mini'],
-  },
-  {
-    name: '阿里百炼 (Qwen)',
-    endpoint: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
-    models: ['qwen3-235b-a22b', 'qwen3-max', 'qwen-plus', 'qwen-turbo'],
-  },
-  {
-    name: '智谱 (GLM)',
-    endpoint: 'https://open.bigmodel.cn/api/paas/v4/chat/completions',
-    models: ['glm-4.5', 'glm-4-plus', 'glm-4-flash', 'glm-z1-air'],
-  },
-  {
-    name: 'Moonshot (Kimi)',
-    endpoint: 'https://api.moonshot.cn/v1/chat/completions',
-    models: ['moonshot-v1-8k', 'moonshot-v1-32k', 'moonshot-v1-128k'],
-  },
-  {
-    name: '硅基流动',
-    endpoint: 'https://api.siliconflow.cn/v1/chat/completions',
-    models: ['deepseek-ai/DeepSeek-V3', 'Pro/zai-org/GLM-4.5', 'Qwen/Qwen3-235B-A22B'],
-  },
-  { name: '自定义', endpoint: '', models: [] },
-]
-
 export interface AiChunk {
   content: string
   thinking: string
@@ -236,6 +242,14 @@ export const DEFAULT_PERSONA: Persona = {
   hairColor: '#ff9fbf',
   eyeColor: '#ff6b9d',
   avatar: '',
+  description: '',
+  scenario: '',
+  firstMessage: '',
+  exampleDialogue: '',
+  systemPrompt: '',
+  creator: '',
+  tags: [],
+  lorebook: [],
 }
 
 export const DEFAULT_USER_PROFILE: UserProfile = {

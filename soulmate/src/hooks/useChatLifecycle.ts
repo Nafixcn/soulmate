@@ -68,14 +68,18 @@ export function useChatLifecycle({
 
   useEffect(
     () =>
-      scheduleDailyGreetings(greetingSettings, () => {
-        const state = useChatStore.getState()
-        if (state.activePersonaId !== personaId) return
-        const lastUserMessage = [...state.messages].reverse().find((message) => message.role === 'user')?.content
-        const greeting = buildGroundedGreeting({ preferredAddress, interests, lastUserMessage })
-        void addGreeting(greeting)
-        showGreetingNotification(greeting)
-      }),
+      scheduleDailyGreetings(
+        greetingSettings,
+        () => {
+          const state = useChatStore.getState()
+          if (state.activePersonaId !== personaId) return
+          const lastUserMessage = [...state.messages].reverse().find((message) => message.role === 'user')?.content
+          const greeting = buildGroundedGreeting({ preferredAddress, interests, lastUserMessage })
+          void addGreeting(greeting)
+          showGreetingNotification(greeting)
+        },
+        personaId,
+      ),
     [addGreeting, greetingSettings, interests, personaId, preferredAddress],
   )
 }

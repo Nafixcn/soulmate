@@ -1,34 +1,37 @@
-import React, { useCallback, useState, useMemo } from 'react'
+import React, { useCallback, useState } from 'react'
 import { useChatStore } from '../store/chatStore'
 import { useSettingsStore } from '../store/settingsStore'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
 import { useChatLifecycle } from '../hooks/useChatLifecycle'
 import { useChatScroll } from '../hooks/useChatScroll'
 import { useChatShortcuts } from '../hooks/useChatShortcuts'
 import { exportFullChatTranscript } from '../services/chatExport'
 import { ChatHeader } from './ChatHeader'
 import { MessageBubble } from './MessageBubble'
+import { StreamingMessage } from './StreamingMessage'
 import { ChatInput } from './ChatInput'
-import { PersonaEditor } from './PersonaEditor'
 import { PersonaManager } from './PersonaManager'
 import { SettingsPanel } from './SettingsPanel'
 import { SearchPanel } from './SearchPanel'
-import { AlertTriangle, Search, Download } from 'lucide-react'
-
-const petalCount = 12
-
-function petalRandom(index: number, salt: number): number {
-  const value = Math.sin((index + 1) * (salt + 1) * 12.9898) * 43758.5453
-  return value - Math.floor(value)
-}
+import {
+  AlertTriangle,
+  Search,
+  Download,
+  Brain,
+  BookOpen,
+  Cpu,
+  Sparkles,
+  ArrowDown,
+  Heart,
+  Sun,
+  ArrowUpRight,
+} from 'lucide-react'
+import { getModelDisplayName } from '../domain/modelProvider'
 
 export const ChatWindow: React.FC = () => {
   const messages = useChatStore((s) => s.messages)
+  const userMsgCount = useChatStore((s) => s.userMsgCount)
   const isTyping = useChatStore((s) => s.isTyping)
   const error = useChatStore((s) => s.error)
-  const streamingContent = useChatStore((s) => s.streamingContent)
-  const streamingThinking = useChatStore((s) => s.streamingThinking)
   const sendMessage = useChatStore((s) => s.sendMessage)
   const clearChat = useChatStore((s) => s.clearChat)
   const clearError = useChatStore((s) => s.clearError)
@@ -40,15 +43,15 @@ export const ChatWindow: React.FC = () => {
   const isLoadingConversation = useChatStore((s) => s.isLoadingConversation)
   const deleteFrom = useChatStore((s) => s.deleteFrom)
   const regenerate = useChatStore((s) => s.regenerate)
+  const switchAlternative = useChatStore((s) => s.switchAlternative)
   const {
     aiSettings,
+    appIcon,
     ttsSettings,
     persona,
     personas,
     activePersonaIndex,
-    setPersona,
     switchPersona,
-    theme,
     aiConfigured,
     persistenceError,
     clearPersistenceError,
@@ -56,24 +59,11 @@ export const ChatWindow: React.FC = () => {
     greetingSettings,
   } = useSettingsStore()
 
-  const [showEditor, setShowEditor] = useState(false)
+  const [personaWorkspace, setPersonaWorkspace] = useState<'closed' | 'library' | 'current'>('closed')
   const [showSettings, setShowSettings] = useState(false)
-  const [showManagePersonas, setShowManagePersonas] = useState(false)
+  const [settingsInitialTab, setSettingsInitialTab] = useState<'ai' | 'memory'>('ai')
   const [showSearch, setShowSearch] = useState(false)
-  const [streamingThinkOpen, setStreamingThinkOpen] = useState(true)
   const [actionError, setActionError] = useState<string | null>(null)
-  const streamingThinkingId = React.useId()
-  const [petals] = useMemo(() => {
-    const arr = Array.from({ length: petalCount }, (_, i) => ({
-      id: i,
-      left: petalRandom(i, 0) * 100,
-      delay: petalRandom(i, 1) * 12,
-      duration: 8 + petalRandom(i, 2) * 10,
-      size: 14 + petalRandom(i, 3) * 14,
-      emoji: theme.petals[Math.floor(petalRandom(i, 4) * theme.petals.length)],
-    }))
-    return [arr] as const
-  }, [theme.petals])
   useChatLifecycle({
     personaId: persona.id,
     error,
@@ -84,19 +74,18 @@ export const ChatWindow: React.FC = () => {
     greetingSettings,
   })
 
-  const { messagesRef, bottomRef, scrollToMessage } = useChatScroll({
+  const { messagesRef, bottomRef, scrollToMessage, followLatest, isAwayFromLatest, returnToLatest } = useChatScroll({
+    personaId: persona.id,
     messages,
     isTyping,
-    streamingContent,
     hasMore,
     isLoadingMore,
     loadEarlierMessages,
   })
 
   const closeOverlays = useCallback(() => {
-    setShowEditor(false)
+    setPersonaWorkspace('closed')
     setShowSettings(false)
-    setShowManagePersonas(false)
     setShowSearch(false)
   }, [])
 
@@ -115,8 +104,9 @@ export const ChatWindow: React.FC = () => {
   const handleSend = useCallback(
     (text: string) => {
       if (!aiConfigured) {
+        setSettingsInitialTab('ai')
         setShowSettings(true)
-        return Promise.resolve()
+        return Promise.resolve(false)
       }
       return sendMessage(text, persona, aiSettings, ttsSettings)
     },
@@ -140,6 +130,16 @@ export const ChatWindow: React.FC = () => {
     [deleteFrom],
   )
 
+  const handleSwitchAlternative = useCallback(
+    (messageId: string, direction: -1 | 1) => void switchAlternative(messageId, direction),
+    [switchAlternative],
+  )
+
+  const openMemorySettings = useCallback(() => {
+    setSettingsInitialTab('memory')
+    setShowSettings(true)
+  }, [])
+
   const handleClearChat = useCallback(() => {
     if (messages.length === 0 || !window.confirm('清空当前角色的全部聊天记录？')) return
     void clearChat()
@@ -152,36 +152,88 @@ export const ChatWindow: React.FC = () => {
     [persona, aiSettings, ttsSettings, regenerate],
   )
 
+  const enabledLoreEntries = persona.lorebook.filter((entry) => entry.enabled).length
+  const quickStarts = [`${persona.name}，今天过得怎么样？`, '陪我聊聊今天发生的事', '你现在最想和我做什么？']
+  const conversationStarters = [
+    { label: '分享今天', prompt: '陪我聊聊今天发生的事', icon: Sun },
+    { label: '聊聊心情', prompt: '我想和你说说现在的心情', icon: Heart },
+    { label: '来点灵感', prompt: '一起想想有什么有趣的事可以做吧', icon: Sparkles },
+  ]
+
   return (
     <div className="chat-window">
-      <div className="sakura-petals">
-        {petals.map((p) => (
-          <div
-            key={p.id}
-            className="sakura-petal"
-            style={{
-              left: `${p.left}%`,
-              animationDelay: `${p.delay}s`,
-              animationDuration: `${p.duration}s`,
-              fontSize: p.size,
-            }}
-          >
-            {p.emoji}
-          </div>
-        ))}
-      </div>
       <ChatHeader
+        appIcon={appIcon}
         persona={persona}
         personas={personas}
         activePersonaIndex={activePersonaIndex}
-        onEditPersona={() => setShowEditor(true)}
-        onManagePersonas={() => setShowManagePersonas(true)}
-        onSettings={() => setShowSettings(true)}
+        onEditPersona={() => setPersonaWorkspace('current')}
+        onManagePersonas={() => setPersonaWorkspace('library')}
+        onSettings={() => {
+          setSettingsInitialTab('ai')
+          setShowSettings(true)
+        }}
         onClearChat={handleClearChat}
         onSwitchPersona={switchPersona}
       />
       <div className="chat-main">
+        <header className="conversation-bar">
+          <div className="conversation-title">
+            <span className="conversation-kicker">正在陪伴</span>
+            <div>
+              <strong>{persona.name}</strong>
+              <span className="presence-badge">
+                <span className="online-dot" /> 在线
+              </span>
+            </div>
+          </div>
+          <div className="conversation-mobile-label">
+            <span>我们的对话</span>
+            <span className="conversation-mobile-presence">
+              <span className="online-dot" /> 正在陪伴
+            </span>
+          </div>
+          <div className="context-chips" aria-label="当前对话上下文">
+            <span className="context-chip" title={aiSettings.model}>
+              <Cpu size={13} /> {aiSettings.model ? getModelDisplayName(aiSettings.model) : '未选择模型'}
+            </span>
+            <span className={`context-chip ${aiSettings.memoryEnabled !== false ? 'enabled' : ''}`}>
+              <Brain size={13} /> {aiSettings.memoryEnabled !== false ? '记忆已开启' : '记忆已关闭'}
+            </span>
+            <span className={`context-chip ${enabledLoreEntries > 0 ? 'enabled' : ''}`}>
+              <BookOpen size={13} /> 世界书 {enabledLoreEntries}
+            </span>
+          </div>
+          <div className="conversation-actions">
+            <button
+              type="button"
+              className="toolbar-btn"
+              onClick={toggleSearch}
+              title="搜索 (Ctrl+F)"
+              aria-label="搜索聊天消息"
+            >
+              <Search size={15} />
+            </button>
+            <button
+              type="button"
+              className="toolbar-btn"
+              onClick={handleExport}
+              title="导出 (Ctrl+E)"
+              aria-label="导出聊天记录"
+            >
+              <Download size={15} />
+            </button>
+          </div>
+        </header>
         <div className="chat-body">
+          <div className="companion-ambient" aria-hidden="true">
+            <span className="ambient-orb ambient-orb-purple" />
+            <span className="ambient-orb ambient-orb-pink" />
+            <span className="ambient-orb ambient-orb-blue" />
+            <span className="ambient-star ambient-star-one">✦</span>
+            <span className="ambient-star ambient-star-two">✧</span>
+            <span className="ambient-star ambient-star-three">✦</span>
+          </div>
           {error && (
             <button type="button" className="error-banner" onClick={clearError} aria-label={`关闭错误提示：${error}`}>
               <AlertTriangle size={14} /> {error}
@@ -210,29 +262,62 @@ export const ChatWindow: React.FC = () => {
           {showSearch && (
             <SearchPanel personaId={persona.id} onClose={() => setShowSearch(false)} onScrollTo={handleSearchResult} />
           )}
-          <div className="chat-toolbar">
-            <button
-              type="button"
-              className="toolbar-btn"
-              onClick={toggleSearch}
-              title="搜索 (Ctrl+F)"
-              aria-label="搜索聊天消息"
-            >
-              <Search size={14} />
-            </button>
-            <button
-              type="button"
-              className="toolbar-btn"
-              onClick={handleExport}
-              title="导出 (Ctrl+E)"
-              aria-label="导出聊天记录"
-            >
-              <Download size={14} />
-            </button>
-          </div>
           <div className="chat-messages" ref={messagesRef}>
             <div className="messages-container">
               {isLoadingMore && <div className="loading-more">加载更早的消息中...</div>}
+              {!isLoadingConversation && userMsgCount === 0 && messages.length > 0 && !isTyping && (
+                <section className="conversation-welcome" aria-label="开启今天的对话">
+                  <div className="welcome-art" aria-hidden="true">
+                    <span className="welcome-orbit" />
+                    <span className="welcome-orbit inner" />
+                    <span className="welcome-heart">
+                      <Heart size={28} strokeWidth={1.5} />
+                    </span>
+                    <span className="welcome-sparkle one">✦</span>
+                    <span className="welcome-sparkle two">✧</span>
+                  </div>
+                  <span className="welcome-eyebrow">A LITTLE SPACE FOR US</span>
+                  <h1>把今天，分享给我。</h1>
+                  <p>
+                    开心的小事，或心里的烦恼，
+                    <br className="welcome-mobile-break" />
+                    都可以和 {persona.name} 慢慢说。
+                  </p>
+                  <div className="welcome-starters">
+                    {conversationStarters.map(({ label, prompt, icon: Icon }) => (
+                      <button type="button" key={label} onClick={() => void handleSend(prompt)}>
+                        <Icon size={17} strokeWidth={1.6} aria-hidden="true" />
+                        <span>{label}</span>
+                        <ArrowUpRight size={13} aria-hidden="true" />
+                      </button>
+                    ))}
+                  </div>
+                  <div className="welcome-divider">
+                    <span />
+                    属于你们的这一刻
+                    <span />
+                  </div>
+                </section>
+              )}
+              {!isLoadingConversation && messages.length === 0 && !isTyping && (
+                <section className="conversation-empty" aria-label="开始对话">
+                  <div className="empty-avatar" aria-hidden="true">
+                    {persona.avatar ? <img src={persona.avatar} alt="" /> : <span>{persona.emoji}</span>}
+                  </div>
+                  <span className="empty-kicker">
+                    <Sparkles size={14} /> 只属于你们的空间
+                  </span>
+                  <h1>和 {persona.name} 说点什么吧</h1>
+                  <p>{persona.firstMessage || `我在这里。无论今天发生了什么，都可以慢慢告诉我。`}</p>
+                  <div className="quick-starts">
+                    {quickStarts.map((prompt) => (
+                      <button type="button" key={prompt} onClick={() => void handleSend(prompt)}>
+                        {prompt}
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              )}
               {messages.map((msg) => (
                 <div key={msg.id} data-message-id={msg.id}>
                   <MessageBubble
@@ -240,72 +325,31 @@ export const ChatWindow: React.FC = () => {
                     persona={persona}
                     onDelete={handleDeleteFrom}
                     onRegenerate={handleRegenerate}
+                    onSwitchAlternative={handleSwitchAlternative}
+                    onOpenMemorySettings={openMemorySettings}
                   />
                 </div>
               ))}
-              {isTyping && !streamingContent && (
-                <div className="typing-indicator">
-                  <div className="msg-avatar">
-                    {persona.avatar ? (
-                      <img src={persona.avatar} className="avatar-img-msg" alt="" />
-                    ) : (
-                      <span>{persona.emoji}</span>
-                    )}
-                  </div>
-                  <div className="typing-dots">
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                  </div>
-                </div>
-              )}
-              {isTyping && streamingContent && (
-                <div className="msg-row">
-                  <div className="msg-avatar">
-                    {persona.avatar ? (
-                      <img src={persona.avatar} className="avatar-img-msg" alt="" />
-                    ) : (
-                      <span>{persona.emoji}</span>
-                    )}
-                  </div>
-                  <div className="msg-body">
-                    {streamingThinking && (
-                      <div className="thinking-wrapper">
-                        <button
-                          type="button"
-                          className="thinking-toggle"
-                          onClick={() => setStreamingThinkOpen(!streamingThinkOpen)}
-                          aria-expanded={streamingThinkOpen}
-                          aria-controls={streamingThinkingId}
-                        >
-                          <span className="think-arrow" aria-hidden="true">
-                            {streamingThinkOpen ? '▾' : '▸'}
-                          </span>
-                          思考过程
-                        </button>
-                        {streamingThinkOpen && (
-                          <div id={streamingThinkingId} className="thinking-block">
-                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{streamingThinking}</ReactMarkdown>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    <div className="msg-bubble ai-bubble streaming-markdown">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{streamingContent}</ReactMarkdown>
-                      <span className="cursor-blink">|</span>
-                    </div>
-                  </div>
-                </div>
-              )}
+              {isTyping && <StreamingMessage persona={persona} onContentChange={followLatest} />}
               <div ref={bottomRef} />
             </div>
           </div>
+          {isAwayFromLatest && (
+            <button type="button" className="latest-message-btn" onClick={returnToLatest} aria-label="回到最新消息">
+              <ArrowDown size={15} aria-hidden="true" /> 最新消息
+            </button>
+          )}
         </div>
         <ChatInput onSend={handleSend} disabled={isTyping || isLoadingConversation} />
+        <div className="composer-footer" aria-hidden="true">
+          <span>
+            <Sparkles size={11} /> 慢慢说，我在听。
+          </span>
+          <span>Enter 发送 · Shift + Enter 换行</span>
+        </div>
       </div>
-      {showEditor && <PersonaEditor persona={persona} onChange={setPersona} onClose={() => setShowEditor(false)} />}
-      {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
-      {showManagePersonas && (
+      {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} initialTab={settingsInitialTab} />}
+      {personaWorkspace !== 'closed' && (
         <PersonaManager
           personas={personas}
           activeIndex={activePersonaIndex}
@@ -313,7 +357,8 @@ export const ChatWindow: React.FC = () => {
           onUpdate={(i, p) => useSettingsStore.getState().updatePersona(i, p)}
           onRemove={(i) => useSettingsStore.getState().removePersona(i)}
           onSwitch={switchPersona}
-          onClose={() => setShowManagePersonas(false)}
+          onClose={() => setPersonaWorkspace('closed')}
+          initialEditIndex={personaWorkspace === 'current' ? activePersonaIndex : undefined}
         />
       )}
     </div>

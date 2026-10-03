@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Memory, Message, Persona } from '../types'
+import { DEFAULT_PERSONA, type Memory, type Message, type Persona } from '../types'
 import {
   buildConversationMessages,
   detectExpression,
@@ -9,6 +9,7 @@ import {
 } from './conversation'
 
 const persona: Persona = {
+  ...DEFAULT_PERSONA,
   id: 'persona-1',
   name: '灵伴',
   age: 20,
@@ -70,6 +71,23 @@ describe('buildConversationMessages', () => {
 
     expect(request[0].content).toContain('外部知识检索结果')
     expect(request[0].content).toContain('资料：可信内容')
+  })
+
+  it('injects only lorebook entries whose keywords were recently mentioned', () => {
+    const request = buildConversationMessages(
+      [{ id: 'u-lore', role: 'user', content: '我们去海边小屋吧', timestamp: 1 }],
+      {
+        ...persona,
+        lorebook: [
+          { id: 'hit', name: '小屋', keywords: ['海边'], content: '窗外能看到灯塔', enabled: true, priority: 100 },
+          { id: 'miss', name: '学校', keywords: ['学校'], content: '学校在山顶', enabled: true, priority: 100 },
+        ],
+      },
+    )
+
+    expect(request[0].content).toContain('当前触发的世界设定')
+    expect(request[0].content).toContain('窗外能看到灯塔')
+    expect(request[0].content).not.toContain('学校在山顶')
   })
 
   it('grounds the prompt in user-controlled profile and memories', () => {
@@ -140,5 +158,29 @@ describe('selectRelevantMemories', () => {
     )
 
     expect(selected.map((item) => item.id)).toEqual(['pinned', 'related'])
+  })
+
+  it('uses recent user context and excludes disabled memories', () => {
+    const selected = selectRelevantMemories(
+      [
+        memory({ id: 'event', category: 'event', content: '周六去看了电影' }),
+        memory({ id: 'disabled', content: '喜欢爵士音乐', pinned: true, enabled: false }),
+        memory({ id: 'other', content: '不喜欢香菜' }),
+      ],
+      '后来怎么样了？',
+      6,
+      ['我们周六去看了电影'],
+    )
+
+    expect(selected.map((item) => item.id)).toEqual(['event'])
+  })
+
+  it('keeps active boundaries in context even without matching words', () => {
+    const selected = selectRelevantMemories(
+      [memory({ id: 'boundary', category: 'boundary', content: '不要催促回复' })],
+      '晚上好',
+    )
+
+    expect(selected.map((item) => item.id)).toEqual(['boundary'])
   })
 })
